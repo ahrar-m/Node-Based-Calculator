@@ -7,6 +7,33 @@
 
 ---
 
+## 0. ⭐ STANDING SESSION PROTOCOL — what "read the agent file and go from there" means
+
+When the user says anything like **"read the agent file and go from there"** (or keeps a
+request short and open), this file IS the instruction set — follow it end to end, every
+time, in this order:
+
+1. **Orient.** Read this file fully, then `inputs/` ([user-brief.md](inputs/user-brief.md),
+   [discovery-qa.md](inputs/discovery-qa.md), [decisions.md](inputs/decisions.md),
+   [agent-journey.md](inputs/agent-journey.md)) and [README.md](README.md) so you know the
+   tool's features and how it operates. Never read the built HTML files (rule 1).
+2. **Plan.** Create/refresh the session to-do list (rule 7) with the concrete steps the
+   user's words imply.
+3. **Ask.** If the request is ambiguous, incomplete, or could mean several things, ask the
+   user **as many clarifying questions as needed** (rule 8) — never guess. Record their
+   answers **verbatim** in `inputs/`.
+4. **Execute.** Do the work following rules 1–6: edit `src/` / docs → `node build.mjs` →
+   run the four checks → fix until green.
+5. **Finish.** Commit with a **detailed multi-paragraph message** (rule 9), push to `main`,
+   verify `HEAD == origin/main` and a clean tree, and confirm the live Pages URL returns 200.
+6. **Close the loop.** Mark the to-do list complete, log the session here + in
+   `inputs/agent-journey.md`, and tell the user what changed and where.
+
+The user should be able to say only **"read AGENT.md and go from there"** — this protocol
+does the rest.
+
+---
+
 ## 1. TL;DR
 
 **CalcGraph** ("Node-Based Calculator") is a **browser-only, equation-first formula
@@ -246,6 +273,11 @@ No `npm install` needed for anything.
   (7, follow-up) Added rule 9: always end executed work with a **detailed multi-paragraph
   commit message** and push — never leave changes uncommitted; the checklist's finishing
   step now requires committing with a detailed message and verifying the push matches HEAD.
+  (8, follow-up) Added **§0 STANDING SESSION PROTOCOL**: the user wants to be able to just
+  say "read the agent file and go from there" — so AGENT.md now opens with a complete
+  6-step protocol (orient → plan to-do list → ask questions → execute → detailed commit +
+  push → close the loop) that makes that single sentence a full instruction. Reading order
+  and checklist updated to start there.
   Rebuilt all outputs; all four checks green; committed and pushed.
 
 - **Session 4 (features + redesign):** (1) **editable variable names** — inspector name field +
@@ -263,10 +295,10 @@ No `npm install` needed for anything.
 
 ## 11. Suggested actions for the NEXT session
 
-1. **Create or refresh the session to-do list first**, then read this file, then
-   [inputs/user-brief.md](inputs/user-brief.md) and
-   [inputs/discovery-qa.md](inputs/discovery-qa.md) — do NOT open built HTML files.
-   Update the to-do list after **every** task (working rule 7).
+1. If the user opened with a short instruction like "read the agent file and go from
+   there", follow **§0 standing session protocol** end to end: orient → plan the to-do
+   list → ask questions → execute → detailed commit + push → close the loop. For any
+   other request, still start by reading this file + `inputs/` first.
 2. **Before any new work, ask the user as many clarifying questions as needed** until the
    request is unambiguous (working rule 8) — never build on assumptions. Record the Q&A
    verbatim in `inputs/` when it changes the project.
@@ -281,7 +313,7 @@ No `npm install` needed for anything.
 
 ## 12. Reading order
 
-1. This file (AGENT.md)
+1. This file (AGENT.md) — **start with §0 (standing session protocol)**, then working rules
 2. [inputs/user-brief.md](inputs/user-brief.md) — the user's words
 3. [inputs/discovery-qa.md](inputs/discovery-qa.md) — the 11 questions + exact answers
 4. [inputs/decisions.md](inputs/decisions.md) — decisions & requirements
@@ -293,5 +325,6 @@ No `npm install` needed for anything.
 ---
 *Last updated: session 5 — button-layout audit + CSS fixes, "+ New term" bug fix + regression
 checks, README operation guide, working rule 7 (keep the session to-do list updated after every
-task), working rule 8 (always ask the user as many clarifying questions as needed), and working
-rule 9 (always finish with a detailed multi-paragraph commit message + push).*
+task), working rule 8 (always ask the user as many clarifying questions as needed), working
+rule 9 (always finish with a detailed multi-paragraph commit message + push), and §0 STANDING
+SESSION PROTOCOL (so the user can just say "read the agent file and go from there").*

@@ -190,6 +190,12 @@ verified app. Numbered phases, each with what was done and why it mattered.
     detailed commit") — no wip commits, push must match HEAD, tree must be clean — and made
     the detailed commit + push verification the explicit finishing step of the next-session
     checklist. Committed and pushed.
+61. **Follow-up (same session):** the user wants to be able to just say "read the agent file
+    and go from there" and have the agent handle everything. Added **§0 STANDING SESSION
+    PROTOCOL** at the top of AGENT.md — a complete 6-step loop (orient → plan the to-do
+    list → ask clarifying questions → execute per rules → detailed commit + push → close the
+    loop) — so a bare instruction is now a complete, self-contained workflow. Reading order
+    and next-session checklist updated to start at §0. Committed and pushed.
 
 ---
 *Append new phases here in later sessions so the history stays complete.*
