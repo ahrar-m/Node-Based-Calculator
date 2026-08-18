@@ -109,5 +109,17 @@ verified app. Numbered phases, each with what was done and why it mattered.
 39. Built `tools/ui-smoke.mjs` — a DOM-stub harness that boots the **actual built `docs/index.html`** and exercises skeleton build, model load, evaluation, selection, drill-down, quiet updates, view switches, builder modal, and constant creation. Caught and fixed stub-fidelity gaps; now **12/12 UI tests pass** with zero exceptions.
 40. Re-verified the whole suite (engine 29/29, bundle executes, zero external deps), rebuilt all three outputs, committed and pushed.
 
+
+## Phase 11 — Agent documentation session (user request)
+41. User asked to document clearly that **agents must not read the built HTML files**
+    (docs/index.html, index.html, calcgraph.html) to avoid burning tokens, and to capture
+    anything else that makes the next session more fruitful.
+42. Rewrote AGENT.md: prominent Working Rules for Agents (rule 1: never read built HTML;
+    canonical flow edit -> build -> 4 checks -> commit -> push; rebuild-before-UI-test;
+    examples as build inputs), Known pitfalls (boot/init, results-map shape, escape
+    hazards, PS 5.1), a Session log, and a next-session checklist.
+43. Added the same never-read-built-HTML note to the SPEC reading order.
+44. Committed and pushed the documentation update.
+
 ---
 *Append new phases here in later sessions so the history stays complete.*
