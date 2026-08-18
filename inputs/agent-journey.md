@@ -185,6 +185,11 @@ verified app. Numbered phases, each with what was done and why it mattered.
     acting. Added working rule 8 ("Ask first") referencing the 11-question discovery round as
     the house style, made asking questions step 2 of the next-session checklist, and recorded
     the Q&A-verbatim convention in `inputs/`. Committed and pushed.
+60. **Follow-up (same session):** the user asked that agents ALWAYS commit with a detailed
+    message after finishing execution. Added working rule 9 ("Always end executed work with a
+    detailed commit") — no wip commits, push must match HEAD, tree must be clean — and made
+    the detailed commit + push verification the explicit finishing step of the next-session
+    checklist. Committed and pushed.
 
 ---
 *Append new phases here in later sessions so the history stays complete.*

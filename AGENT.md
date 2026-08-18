@@ -62,6 +62,13 @@ serving root `index.html`; shareable `calcgraph.html` is also committed).
    a scope, never trade "quick progress" for a wrong build, and never treat silence as
    approval. Record every question and the user's answers **verbatim** in `inputs/` so later
    sessions inherit the context.
+9. **Always end executed work with a detailed commit — never leave changes uncommitted.**
+   After finishing ANY execution (fix, feature, docs, tests) commit to `main` with a
+   **detailed multi-paragraph message** and push. A good message says WHAT changed, WHY
+   (root cause / user requirement), HOW (files + approach), what pitfalls were found,
+   which checks ran and their results, and names every changed file. No "wip" or
+   "updated stuff" commits ever. If a push fails, retry until `origin/main` matches
+   `HEAD`; a session is not finished until the tree is clean and everything is pushed.
 
 ---
 
@@ -236,6 +243,9 @@ No `npm install` needed for anything.
   (6, follow-up) Added rule 8: agents must ask the user as many clarifying questions as
   needed before acting on any ambiguous request (the discovery-round habit), and the
   next-session checklist now makes asking questions step 2.
+  (7, follow-up) Added rule 9: always end executed work with a **detailed multi-paragraph
+  commit message** and push — never leave changes uncommitted; the checklist's finishing
+  step now requires committing with a detailed message and verifying the push matches HEAD.
   Rebuilt all outputs; all four checks green; committed and pushed.
 
 - **Session 4 (features + redesign):** (1) **editable variable names** — inspector name field +
@@ -265,8 +275,9 @@ No `npm install` needed for anything.
 4. If the user wants a new feature: ask any clarifying questions first (rule 8), add it
    to `src/`, rebuild, run all four checks, then commit with a detailed message and push;
    update this file + the journey.
-5. Before claiming done: run all checks, confirm `git status` is clean, and confirm
-   the live Pages URL returns 200 after the push.
+5. Before claiming done: run all checks, **commit with a detailed multi-paragraph message
+   (working rule 9)**, push, confirm `git status` is clean and `origin/main` matches
+   `HEAD`, and confirm the live Pages URL returns 200 after the push.
 
 ## 12. Reading order
 
@@ -282,4 +293,5 @@ No `npm install` needed for anything.
 ---
 *Last updated: session 5 — button-layout audit + CSS fixes, "+ New term" bug fix + regression
 checks, README operation guide, working rule 7 (keep the session to-do list updated after every
-task), and working rule 8 (always ask the user as many clarifying questions as needed).*
+task), working rule 8 (always ask the user as many clarifying questions as needed), and working
+rule 9 (always finish with a detailed multi-paragraph commit message + push).*
