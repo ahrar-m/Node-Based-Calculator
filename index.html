@@ -5,197 +5,679 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CalcGraph — Node Based Calculator</title>
 <style>
-/* 01-base.css — tokens, reset, typography */
+/* 01-base.css — design tokens, reset, typography, scrollbars */
 :root {
-  --bg: #0f141b;
-  --bg-2: #151c26;
-  --bg-3: #1c2532;
-  --panel: #121924;
-  --border: #26303f;
-  --border-2: #334155;
-  --text: #e6edf5;
-  --text-dim: #94a3b8;
-  --accent: #4f9cf9;
-  --accent-2: #7cc0ff;
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --err: #f87171;
+  --bg-0: #06090f;
+  --bg-1: #0a0e17;
+  --bg-2: #0e1420;
+  --bg-3: #141c2b;
+  --glass: rgba(255,255,255,.032);
+  --glass-2: rgba(255,255,255,.06);
+  --glass-3: rgba(255,255,255,.1);
+  --line: rgba(150,168,196,.13);
+  --line-2: rgba(150,168,196,.26);
+  --text: #e9eef8;
+  --text-dim: #8fa0ba;
+  --ink: #0b1020;
+  --accent: #6e8bff;
+  --accent-2: #38e1ff;
+  --grad: linear-gradient(135deg, #7c8cff 0%, #22d3ee 60%, #3ddc97 120%);
+  --grad-soft: linear-gradient(135deg, rgba(124,140,255,.22), rgba(56,225,255,.16));
+  --ok: #3ddc97;
+  --warn: #ffc857;
+  --err: #ff6b81;
+  --value: #3ddc97;
+  --formula: #54c8ff;
+  --group: #ffc857;
+  --constant: #a78bfa;
+  --num: #ffd166;
   --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
-  --radius: 8px;
-  --shadow: 0 8px 24px rgba(0,0,0,.35);
+  --radius: 10px;
+  --radius-l: 16px;
+  --radius-xl: 22px;
+  --shadow-1: 0 2px 10px rgba(0,0,0,.28);
+  --shadow-2: 0 14px 44px rgba(0,0,0,.55);
+  --glow: 0 0 0 3px rgba(110,139,255,.16);
+  --ease: cubic-bezier(.22,.8,.36,1);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 720px at 12% -8%, rgba(110,139,255,.15), transparent 60%),
+    radial-gradient(900px 620px at 108% 4%, rgba(56,225,255,.11), transparent 55%),
+    radial-gradient(1000px 900px at 50% 115%, rgba(61,220,151,.07), transparent 55%),
+    var(--bg-1);
   color: var(--text);
-  font: 14px/1.5 system-ui, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.55 system-ui, "Segoe UI", Roboto, Inter, sans-serif;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
-button { font: inherit; cursor: pointer; }
-input, select, textarea { font: inherit; color: var(--text); background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; outline: none; }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,156,249,.2); }
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, select, textarea {
+  font: inherit; color: var(--text);
+  background: rgba(8,12,22,.55);
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+input:hover, select:hover, textarea:hover { border-color: rgba(150,168,196,.4); }
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(110,139,255,.16);
+  background: rgba(10,15,26,.8);
+}
+::placeholder { color: var(--text-dim); opacity: .6; }
+select {
+  appearance: none; -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+  cursor: pointer;
+}
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(150,168,196,.16); border-radius: 6px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(150,168,196,.32);
+  border: 2px solid transparent; background-clip: padding-box;
+}
 ::-webkit-scrollbar-track { background: transparent; }
 .scrollable { overflow: auto; }
+.meta { color: var(--text-dim); font-size: 11px; font-weight: 400; opacity: .85; }
+.kbd {
+  font-family: var(--mono); font-size: 10.5px; padding: 1px 6px;
+  border: 1px solid var(--line-2); border-radius: 5px;
+  background: rgba(255,255,255,.05); color: var(--text-dim);
+}
 
 
-/* 02-layout.css — app shell grid, header, sidebars, footer */
-#app { display: grid; grid-template-rows: 48px 1fr 34px; height: 100vh; }
+/* 02-layout.css — app shell grid, glass header, sidebars, footer */
+#app { display: grid; grid-template-rows: 58px 1fr 42px; height: 100vh; }
 
-/* Header */
-.hdr { display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
-.hdr .logo { font-weight: 700; letter-spacing: .3px; white-space: nowrap; }
-.hdr .logo small { color: var(--text-dim); font-weight: 400; margin-left: 6px; }
+/* ---------- Header (glass) ---------- */
+.hdr {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 18px;
+  background: rgba(9,13,22,.72);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+  z-index: 20;
+  position: relative;
+}
+.hdr::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(110,139,255,.5), rgba(56,225,255,.4), transparent);
+  opacity: .7; pointer-events: none;
+}
+.logo { display: flex; align-items: center; gap: 11px; white-space: nowrap; }
+.logo-mark {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--grad);
+  display: grid; place-items: center;
+  color: #06121f; font-weight: 800; font-size: 18px;
+  box-shadow: 0 4px 16px rgba(110,139,255,.45), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.logo-name {
+  font-weight: 800; font-size: 16px; letter-spacing: .4px;
+  background: linear-gradient(120deg, #fff, #b9c7ff 55%, #7fe7ff);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.logo small {
+  display: block; color: var(--text-dim); font-weight: 500;
+  font-size: 10px; letter-spacing: .7px; text-transform: uppercase;
+  margin-top: -3px;
+}
 .hdr .spacer { flex: 1; }
-.hdr select { max-width: 260px; }
+.hdr select {
+  max-width: 280px; min-width: 170px;
+  background-color: rgba(255,255,255,.04);
+  border-color: var(--line-2);
+  font-weight: 600; border-radius: 10px;
+}
+#saved-ind { margin-left: 6px; font-size: 12px; font-weight: 600; letter-spacing: .3px; }
 
-/* Workspace: left sidebar | main | right inspector */
-.workspace { display: grid; grid-template-columns: 260px 1fr 320px; min-height: 0; }
-.workspace.cols-none { grid-template-columns: 1fr; }
-aside { background: var(--panel); border-right: 1px solid var(--border); min-height: 0; display: flex; flex-direction: column; }
-#inspector { border-right: none; border-left: 1px solid var(--border); }
+/* ---------- Workspace ---------- */
+.workspace { display: grid; grid-template-columns: 272px 1fr 336px; min-height: 0; }
+aside {
+  background: rgba(12,16,26,.5);
+  border-right: 1px solid var(--line);
+  min-height: 0; display: flex; flex-direction: column; overflow-y: auto;
+}
+#inspector { border-right: none; border-left: 1px solid var(--line); }
 
-/* Left sidebar sections */
-.side-section { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-.side-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); margin-bottom: 6px; }
+.side-section { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.side-section h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--text-dim); margin-bottom: 9px;
+  display: flex; align-items: center; gap: 7px; font-weight: 700;
+}
+.side-section h3::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--grad);
+  box-shadow: 0 0 10px rgba(110,139,255,.8);
+}
 .side-section .flex-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* Main area */
-#main { min-width: 0; min-height: 0; position: relative; background: var(--bg); display: flex; flex-direction: column; }
-#main .view-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
-#main .view-breadcrumbs { display: flex; align-items: center; gap: 4px; font-size: 13px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
-.crumb { color: var(--accent-2); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
-.crumb:hover { background: var(--bg-3); }
-.crumb.current { color: var(--text); cursor: default; }
-.crumb-sep { color: var(--text-dim); }
-#view-root { flex: 1; min-height: 0; position: relative; }
+/* ---------- Main / view header ---------- */
+#main { min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; }
+#main .view-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(9,13,22,.55);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  z-index: 6;
+}
+#main .view-breadcrumbs {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 13px; flex: 1; min-width: 0;
+  overflow-x: auto; white-space: nowrap;
+  color: var(--text-dim);
+}
+.crumb {
+  color: var(--accent-2); cursor: pointer; padding: 3px 9px;
+  border-radius: 8px; font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.crumb:hover { background: rgba(110,139,255,.14); color: #cfe0ff; }
+.crumb.current { color: var(--text); cursor: default; background: rgba(255,255,255,.05); }
+.crumb-sep { color: var(--text-dim); opacity: .55; }
+#view-root { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 
-/* Footer */
-.ftr { display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--bg-2); border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim); }
-.ftr .root-value { color: var(--ok); font-weight: 700; font-family: var(--mono); font-size: 13px; }
+/* ---------- Footer (glass) ---------- */
+.ftr {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 18px;
+  background: rgba(9,13,22,.72);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--text-dim);
+}
+.ftr .root-value {
+  font-weight: 800; font-family: var(--mono); font-size: 13.5px;
+  color: var(--ok);
+  text-shadow: 0 0 16px rgba(61,220,151,.4);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .ftr .spacer { flex: 1; }
+.ftr .kbd { opacity: .85; }
+
+/* ---------- Inspector additions ---------- */
+.insp-head { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.insp-name {
+  flex: 1; min-width: 0;
+  font-weight: 800; font-size: 16px;
+  border-color: transparent; background: transparent;
+  box-shadow: none;
+}
+.insp-name:hover { border-color: var(--line-2); background: rgba(255,255,255,.04); }
+.insp-name:focus { border-color: var(--accent); background: rgba(8,12,22,.8); }
+.value-pill { margin-top: 12px; }
+.value-pill .big {
+  font-size: 22px; font-weight: 800;
+  font-family: var(--mono);
+  background: linear-gradient(120deg, var(--ok), #9af7d0);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  word-break: break-word;
+}
+.value-pill dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; }
+.field-label-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px;
+  color: var(--text-dim); font-weight: 700; margin: 12px 0 5px;
+}
 
 
-/* 03-components.css — buttons, chips, tabs, modals, sliders, toasts, tree */
-.btn { border: 1px solid var(--border); background: var(--bg-3); color: var(--text); border-radius: 6px; padding: 5px 10px; font-size: 13px; }
-.btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #04121f; font-weight: 600; }
-.btn.primary:hover { background: var(--accent-2); }
+/* 03-components.css — buttons, chips, tabs, tree, modal, slider, fields, toasts, notices */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--line-2);
+  background: rgba(255,255,255,.045);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 6px 13px; font-size: 13px; font-weight: 600;
+  transition: all .16s var(--ease);
+  white-space: nowrap;
+}
+.btn:hover {
+  border-color: rgba(110,139,255,.6);
+  background: rgba(110,139,255,.12);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+}
+.btn:active { transform: translateY(0); }
+.btn.primary {
+  background: var(--grad);
+  border-color: transparent;
+  color: #08121f; font-weight: 800;
+  box-shadow: 0 6px 22px rgba(80,120,255,.35);
+}
+.btn.primary:hover {
+  filter: brightness(1.12);
+  background: var(--grad); border-color: transparent;
+  box-shadow: 0 8px 28px rgba(80,120,255,.5);
+  transform: translateY(-1px);
+}
 .btn.danger { color: var(--err); }
-.btn.small { padding: 2px 7px; font-size: 12px; }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.btn.danger:hover { border-color: rgba(255,107,129,.55); background: rgba(255,107,129,.1); }
+.btn.small { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-/* Chips (machine-insertable name/operator tokens) */
-.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border-2); background: var(--bg-2); color: var(--text); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; user-select: none; }
-.chip:hover { border-color: var(--accent); background: var(--bg-3); }
-.chip .meta { color: var(--text-dim); font-size: 11px; font-family: var(--mono); }
-.chip.constant { border-color: #8b5cf6; color: #c4b5fd; }
-.chip.term { border-color: #0ea5e9; }
-.chip.op { border-color: var(--accent); color: var(--accent-2); font-family: var(--mono); }
-.chip.fn { border-color: #f59e0b; color: #fcd34d; font-family: var(--mono); }
-.chip.selected { outline: 2px solid var(--accent); }
+/* Chips (machine-insertable tokens, snapshots, unit chips) */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line-2);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 12px; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; user-select: none;
+  transition: all .15s var(--ease);
+}
+.chip:hover {
+  border-color: var(--accent);
+  background: rgba(110,139,255,.14);
+  transform: translateY(-1px);
+}
+.chip .meta { color: var(--text-dim); font-size: 11px; font-family: var(--mono); font-weight: 500; }
+.chip.constant { border-color: rgba(167,139,250,.55); color: #c4b5fd; background: rgba(167,139,250,.08); }
+.chip.constant:hover { background: rgba(167,139,250,.18); }
+.chip.term { border-color: rgba(84,200,255,.55); color: #aadcff; background: rgba(84,200,255,.07); }
+.chip.term:hover { background: rgba(84,200,255,.16); }
+.chip.op { border-color: rgba(110,139,255,.6); color: #c7d2ff; font-family: var(--mono); }
+.chip.fn { border-color: rgba(255,200,87,.55); color: #ffe0a1; font-family: var(--mono); }
+.chip.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chip button.btn { padding: 0 4px; font-size: 11px; margin-left: 4px; border-radius: 6px; }
 
 /* Tabs */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); padding: 0 8px; background: var(--panel); }
-.tab { padding: 7px 12px; border: none; background: none; color: var(--text-dim); border-bottom: 2px solid transparent; }
-.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 10px; background: rgba(12,16,26,.45); }
+.tab {
+  padding: 9px 14px; color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  font-weight: 600; transition: color .15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); text-shadow: 0 0 14px rgba(110,139,255,.7); }
 
-/* Tree (model outline) */
+/* Badges */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-2);
+  border-radius: 6px; padding: 2px 8px;
+  background: rgba(255,255,255,.03);
+}
+.badge.k-value { color: var(--value); border-color: rgba(61,220,151,.4); background: rgba(61,220,151,.08); }
+.badge.k-formula { color: var(--formula); border-color: rgba(84,200,255,.4); background: rgba(84,200,255,.08); }
+.badge.k-group { color: var(--group); border-color: rgba(255,200,87,.4); background: rgba(255,200,87,.08); }
+.badge.k-constant { color: var(--constant); border-color: rgba(167,139,250,.4); background: rgba(167,139,250,.08); }
+
+/* Tree / outline */
 .tree { list-style: none; }
-.tree li { padding: 3px 4px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.tree li:hover { background: var(--bg-3); }
-.tree li.sel { background: rgba(79,156,249,.15); outline: 1px solid rgba(79,156,249,.4); }
-.tree .caret { color: var(--text-dim); width: 14px; text-align: center; }
-.tree .badge { font-size: 10px; color: var(--text-dim); font-family: var(--mono); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
-.tree .val { margin-left: auto; font-family: var(--mono); color: var(--ok); font-size: 12px; }
-.tree .grp::before { content: "▣ "; color: #f59e0b; }
-.tree .formula::before { content: "ƒ "; color: #0ea5e9; }
-.tree .value::before { content: "• "; color: var(--ok); }
+.tree li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 9px; border-radius: 10px;
+  cursor: pointer; font-size: 13.5px;
+  border: 1px solid transparent;
+  transition: background .14s, transform .14s, border-color .14s;
+}
+.tree li:hover { background: rgba(255,255,255,.05); transform: translateX(2px); }
+.tree li.sel { background: rgba(110,139,255,.14); border-color: rgba(110,139,255,.35); }
+.tree .caret { color: var(--text-dim); width: 16px; text-align: center; font-size: 11px; flex: none; }
+.tree .val {
+  margin-left: auto; font-family: var(--mono); color: var(--ok);
+  font-size: 12px; font-weight: 700;
+  background: rgba(61,220,151,.08);
+  padding: 1px 9px; border-radius: 99px;
+}
+.kind-ic { width: 17px; text-align: center; font-size: 12px; flex: none; }
+.kind-ic.value { color: var(--value); }
+.kind-ic.formula { color: var(--formula); }
+.kind-ic.group { color: var(--group); }
+.kind-ic.constant { color: var(--constant); }
 
 /* Modal */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
-.modal { background: var(--panel); border: 1px solid var(--border-2); border-radius: 12px; box-shadow: var(--shadow); width: min(680px, 94vw); max-height: 90vh; display: flex; flex-direction: column; }
-.modal.wide { width: min(860px, 96vw); }
-.modal h2 { font-size: 15px; padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.modal .m-body { padding: 14px 16px; overflow: auto; min-height: 0; }
-.modal .m-foot { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
-.modal .close { background: none; border: none; color: var(--text-dim); font-size: 18px; }
-.modal .close:hover { color: var(--text); }
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(3,6,12,.6);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 60;
+  animation: fadeIn .16s var(--ease);
+}
+.modal {
+  background: linear-gradient(180deg, rgba(21,28,46,.96), rgba(11,16,28,.97));
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  box-shadow: var(--shadow-2);
+  width: min(700px, 94vw); max-height: 90vh;
+  display: flex; flex-direction: column;
+  animation: pop .2s var(--ease);
+  overflow: hidden;
+}
+.modal.wide { width: min(900px, 96vw); }
+.modal h2 {
+  font-size: 16px; font-weight: 800;
+  padding: 16px 20px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.modal h2::before {
+  content: "\2726";
+  background: var(--grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.modal .m-body { padding: 16px 20px; overflow: auto; }
+.modal .m-foot {
+  padding: 14px 20px; border-top: 1px solid var(--line);
+  display: flex; justify-content: flex-end; gap: 10px;
+  background: rgba(255,255,255,.02);
+}
+.modal .close {
+  width: 32px; height: 32px; border-radius: 9px;
+  color: var(--text-dim); font-size: 15px;
+  transition: all .15s;
+}
+.modal .close:hover { background: rgba(255,107,129,.14); color: var(--err); }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes pop { from { opacity: 0; transform: translateY(16px) scale(.975); } }
 
-/* Slider row */
-.slider-row { display: grid; grid-template-columns: 90px 1fr 70px; gap: 8px; align-items: center; margin: 6px 0; }
-.slider-row input[type=range] { width: 100%; accent-color: var(--accent); }
-.slider-row output { font-family: var(--mono); text-align: right; color: var(--accent-2); }
+/* Slider */
+.slider-row {
+  display: grid; grid-template-columns: 62px 1fr 66px; gap: 10px;
+  align-items: center; margin: 8px 0;
+}
+.slider-row span { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); }
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(110,139,255,.65), rgba(56,225,255,.7));
+  outline: none; cursor: pointer; border: none; box-shadow: none; padding: 0; margin: 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent);
+  box-shadow: 0 0 14px rgba(110,139,255,.85);
+  transition: transform .12s var(--ease);
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.18); }
+input[type=range]::-moz-range-thumb {
+  width: 15px; height: 15px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent);
+  box-shadow: 0 0 14px rgba(110,139,255,.85);
+}
+.slider-row output { font-family: var(--mono); text-align: right; color: #cfe0ff; font-weight: 800; }
 
 /* Form fields */
-.field { margin: 8px 0; }
-.field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); margin-bottom: 4px; }
+.field { margin: 10px 0; }
+.field label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px;
+  color: var(--text-dim); margin-bottom: 5px; font-weight: 700;
+}
 .field input[type=text], .field input[type=number], .field select, .field textarea { width: 100%; }
-.field textarea { resize: vertical; min-height: 70px; font-family: var(--mono); }
+.field textarea { resize: vertical; min-height: 70px; font-family: var(--mono); line-height: 1.55; }
+
+/* Unit picker */
+.unit-pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.unit-pick select { min-width: 118px; }
+.unit-custom {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 8px 10px; border: 1px dashed var(--line-2);
+  border-radius: 10px; background: rgba(255,255,255,.02);
+  width: 100%;
+}
+.derived-unit {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--constant);
+  background: rgba(167,139,250,.08);
+  border: 1px dashed rgba(167,139,250,.4);
+  border-radius: 9px; padding: 6px 11px; margin-top: 8px;
+}
+.derived-unit.mismatch { color: var(--warn); background: rgba(255,200,87,.07); border-color: rgba(255,200,87,.4); }
+.formula-view { font-family: var(--mono); font-size: 13.5px; word-break: break-word; }
 
 /* Toast */
-.toast-wrap { position: fixed; bottom: 44px; right: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
-.toast { background: var(--bg-3); border: 1px solid var(--border-2); border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 14px; box-shadow: var(--shadow); max-width: 360px; font-size: 13px; }
-.toast.err { border-left-color: var(--err); }
-.toast.ok { border-left-color: var(--ok); }
+.toast-wrap {
+  position: fixed; bottom: 54px; right: 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 120;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(18,24,40,.96);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 11px 16px;
+  box-shadow: var(--shadow-2);
+  max-width: 380px; font-size: 13px; font-weight: 600;
+  animation: toastIn .25s var(--ease);
+}
+.toast::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 10px var(--accent); flex: none;
+}
+.toast.err::before { background: var(--err); box-shadow: 0 0 10px var(--err); }
+.toast.ok::before { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(30px); } }
 
-/* Inline notices */
-.notice { font-size: 13px; padding: 8px 10px; border-radius: 6px; margin: 6px 0; }
-.notice.err { background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.4); color: var(--err); }
-.notice.ok { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.35); color: var(--ok); }
-.notice.dim { color: var(--text-dim); background: var(--bg-2); }
+/* Notices */
+.notice { font-size: 13px; padding: 9px 12px; border-radius: 9px; margin: 7px 0; line-height: 1.55; }
+.notice.err { background: rgba(255,107,129,.09); border: 1px solid rgba(255,107,129,.3); color: #ffb3bf; }
+.notice.ok { background: rgba(61,220,151,.08); border: 1px solid rgba(61,220,151,.28); color: var(--ok); }
+.notice.dim { color: var(--text-dim); background: rgba(255,255,255,.03); border: 1px solid var(--line); }
 
-/* Misc */
-.kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: 13px; }
-.kv dt { color: var(--text-dim); }
-.kv dd { font-family: var(--mono); word-break: break-word; }
-.empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px; text-align: center; }
+/* Key-value rows */
+.kv { display: grid; grid-template-columns: 118px 1fr; gap: 5px 12px; font-size: 13px; }
+.kv dt { color: var(--text-dim); display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
+.kv dd { font-family: var(--mono); word-break: break-word; font-weight: 600; }
 
-
-/* 04-graph.css — the auto-layout node graph */
-#view-root svg { display: block; width: 100%; height: 100%; }
-.edge { stroke: #4b5a6e; stroke-width: 1.5; fill: none; }
-.edge:hover { stroke: var(--accent); }
-.edge-hl { stroke: var(--accent); stroke-width: 2.5; }
-.arrow { fill: #4b5a6e; }
-.arrow-hl { fill: var(--accent); }
-.gnode { cursor: pointer; }
-.gnode rect { fill: var(--bg-3); stroke: var(--border-2); stroke-width: 1.2; rx: 8; }
-.gnode:hover rect { stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(79,156,249,.35)); }
-.gnode.sel rect { stroke: var(--accent); stroke-width: 2.2; }
-.gnode.group rect { stroke: #f59e0b; stroke-dasharray: 5 3; }
-.gnode.group.sel rect { stroke: #fbbf24; stroke-width: 2.6; }
-.gnode text { fill: var(--text); font-size: 12px; }
-.gnode .v label { fill: var(--ok); font-family: var(--mono); font-size: 11.5px; }
-.gnode .name { font-weight: 600; }
-.gnode .badge { fill: #f59e0b; font-size: 10px; }
-.graph-zoom { position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
-.breadcrumb-strip { display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: var(--bg-2); border-bottom: 1px solid var(--border); font-size: 13px; overflow-x: auto; white-space: nowrap; }
+.empty-hint {
+  color: var(--text-dim); font-size: 13px;
+  padding: 28px 20px; text-align: center; line-height: 1.9;
+}
+.empty-hint::before {
+  content: "\25cc"; display: block; font-size: 34px;
+  color: rgba(110,139,255,.5); margin-bottom: 10px;
+}
 
 
-/* 05-equation.css — expandable combined equation view */
-.eq-scroll { padding: 18px; overflow: auto; height: 100%; }
-.eq-root { font-family: var(--mono); font-size: 15px; line-height: 1.9; }
-.eq-line { padding: 3px 0; }
-.eq-line .eq-def { color: var(--accent-2); }
-.eq-line .eq-name { cursor: pointer; padding: 0 3px; border-radius: 4px; font-weight: 700; }
-.eq-line .eq-name:hover { background: var(--bg-3); }
-.eq-line .eq-name.sel { background: rgba(79,156,249,.25); outline: 1px solid var(--accent); }
-.eq-line .eq-name.group { color: #fbbf24; }
-.eq-line .eq-name.value { color: #34d399; }
-.eq-line .eq-name.formula { color: #7cc0ff; }
-.eq-val { color: var(--ok); font-size: 0.85em; margin-left: 8px; }
-.eq-op { color: var(--accent-2); }
-.eq-num { color: #fcd34d; }
-.eq-fn { color: #fbbf24; }
-.eq-factor { color: #8b5cf6; }
-.eq-toggle { cursor: pointer; color: var(--text-dim); user-select: none; padding: 0 4px; }
-.eq-toggle:hover { color: var(--text); }
-.eq-children { margin-left: 26px; border-left: 1px dashed var(--border-2); padding-left: 14px; }
-.eq-badge { font-size: 10px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; margin-left: 8px; vertical-align: 2px; }
+/* 04-graph.css — auto-layout node graph: glowing bezier edges, rich nodes, pan/zoom */
+#view-root {
+  background:
+    radial-gradient(rgba(160,180,220,.055) 1px, transparent 1.5px),
+    rgba(5,8,14,.42);
+  background-size: 24px 24px, auto;
+}
+#view-root svg { display: block; width: 100%; height: 100%; cursor: grab; }
+#view-root svg.panning { cursor: grabbing; }
+
+/* ---------- Edges ---------- */
+.edge {
+  stroke: url(#cg-edgeGrad);
+  stroke-width: 1.9;
+  fill: none;
+  opacity: .72;
+  transition: opacity .15s, stroke-width .15s;
+}
+.edge:hover { opacity: 1; }
+.edge-hl { opacity: 1; stroke-width: 2.8; filter: drop-shadow(0 0 5px rgba(110,139,255,.6)); }
+.edge.group-edge {
+  stroke: url(#cg-edgeGradG);
+  stroke-dasharray: 7 5;
+  stroke-width: 2.1;
+  opacity: .8;
+  animation: dashFlow 14s linear infinite;
+}
+@keyframes dashFlow { to { stroke-dashoffset: -240; } }
+.edge-label {
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 700;
+  fill: var(--constant);
+  background: transparent;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.7));
+}
+.edge-label.group { fill: var(--group); }
+
+/* ---------- Nodes ---------- */
+.gnode {
+  cursor: pointer;
+  transition: transform .15s var(--ease);
+}
+.gnode:hover { transform: translateY(-2px); }
+.gnode rect {
+  stroke: rgba(150,168,196,.3);
+  stroke-width: 1.2;
+  transition: stroke .16s, filter .16s;
+}
+.gnode:hover rect { stroke: var(--accent); filter: drop-shadow(0 0 10px rgba(110,139,255,.4)); }
+.gnode.sel rect {
+  stroke: var(--accent); stroke-width: 2.2;
+  filter: drop-shadow(0 0 16px rgba(110,139,255,.55));
+}
+.gnode.group rect { stroke: rgba(255,200,87,.55); stroke-dasharray: 7 5; }
+.gnode.group:hover rect { stroke: var(--group); filter: drop-shadow(0 0 12px rgba(255,200,87,.35)); }
+.gnode.group.sel rect {
+  stroke: var(--group); stroke-width: 2.2;
+  filter: drop-shadow(0 0 16px rgba(255,200,87,.5));
+}
+.gnode .kicker { fill: var(--accent); opacity: .95; }
+.gnode .kicker.value { fill: var(--value); }
+.gnode .kicker.formula { fill: var(--formula); }
+.gnode .kicker.group { fill: var(--group); }
+
+.gnode .name {
+  font-size: 13px; font-weight: 700;
+  fill: #eef3ff;
+  letter-spacing: .2px;
+}
+.gnode .v { font-family: var(--mono); font-weight: 700; font-size: 12px; }
+.gnode .v .ok { fill: var(--value); }
+.gnode .v .err { fill: var(--err); }
+.gnode .meta { font-family: var(--mono); font-size: 9.5px; letter-spacing: .3px; }
+.gnode .meta .u { fill: var(--constant); }
+.gnode .meta .p { fill: var(--text-dim); }
+
+.gnode .port { fill: #0a0f1c; stroke-width: 1.7; }
+.gnode .port.in { stroke: var(--accent); }
+.gnode .port.out { stroke: rgba(56,225,255,.85); }
+.gnode .badge { fill: var(--group); font-size: 11px; font-weight: 800; }
+
+/* ---------- Controls ---------- */
+.graph-zoom {
+  position: absolute; right: 14px; bottom: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  z-index: 5;
+}
+.graph-zoom .btn {
+  width: 36px; height: 36px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 11px; font-size: 17px;
+  background: rgba(12,17,28,.78);
+  border: 1px solid var(--line-2);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-1);
+}
+.graph-zoom .btn:hover { background: rgba(110,139,255,.16); }
+.graph-hint {
+  position: absolute; left: 14px; bottom: 14px;
+  font-size: 11.5px; color: var(--text-dim);
+  display: flex; gap: 14px; align-items: center;
+  background: rgba(12,17,28,.62);
+  border: 1px solid var(--line);
+  border-radius: 11px; padding: 6px 13px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+
+/* 05-equation.css — the expandable combined-equation view */
+.eq-scroll { padding: 24px 28px; overflow: auto; height: 100%; }
+.eq-root {
+  font-family: var(--mono);
+  font-size: 15.5px; line-height: 2.2;
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0) 45%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 22px 28px 26px;
+  box-shadow: var(--shadow-1);
+  position: relative;
+  overflow: hidden;
+}
+.eq-root::before {
+  content: "";
+  position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px;
+  border-radius: 4px;
+  background: var(--grad);
+}
+.eq-line {
+  padding: 5px 0;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px;
+}
+.eq-name {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 800;
+  border: 1px solid transparent;
+  transition: all .15s var(--ease);
+  display: inline-flex; align-items: baseline; gap: 4px;
+}
+.eq-name:hover { background: rgba(255,255,255,.06); transform: translateY(-1px); }
+.eq-name.sel { background: rgba(110,139,255,.18); border-color: rgba(110,139,255,.5); box-shadow: 0 0 0 3px rgba(110,139,255,.12); }
+.eq-name.group { color: var(--group); background: rgba(255,200,87,.08); }
+.eq-name.value { color: var(--value); background: rgba(61,220,151,.07); }
+.eq-name.formula { color: var(--formula); background: rgba(84,200,255,.07); }
+.eq-u {
+  font-size: .66em; opacity: .75;
+  color: var(--constant);
+  letter-spacing: .4px;
+  font-weight: 600;
+  padding: 0 4px;
+  border: 1px solid rgba(167,139,250,.3);
+  border-radius: 5px;
+}
+.eq-val {
+  color: var(--ok); font-size: .86em; font-weight: 800;
+  margin-left: 10px;
+  text-shadow: 0 0 14px rgba(61,220,151,.32);
+}
+.eq-inputs {
+  font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--text-dim); font-weight: 700;
+  margin-bottom: 6px;
+}
+.eq-op { color: #bfc9ff; font-weight: 700; }
+.eq-num { color: var(--num); font-weight: 700; }
+.eq-fn { color: #ffe0a1; font-weight: 800; font-style: italic; }
+.eq-factor { color: var(--constant); font-weight: 700; }
+.eq-badge {
+  font-size: 9px; color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 99px; padding: 1px 9px;
+  vertical-align: 2px;
+  letter-spacing: .6px; text-transform: uppercase;
+}
+.eq-badge.root {
+  color: var(--group);
+  border-color: rgba(255,200,87,.5);
+  background: rgba(255,200,87,.08);
+}
 
 </style>
 </head>
@@ -623,7 +1105,36 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     return "?";
   }
 
-  CG.parser = { parse, evaluate, simplify, toSource, identifiers, tokenize, FUNCS, CMP };
+  // Token-aware rename: renames every occurrence of the given identifiers
+  // inside a formula string, without touching other tokens. Unknown side
+  // characters (rare) fall back to a word-boundary regex.
+  function renameIdentifiers(src, renameMap) {
+    if (!src || !renameMap) return src;
+    const keys = Object.keys(renameMap);
+    if (!keys.length) return src;
+    let out;
+    try {
+      const toks = tokenize(src);
+      const edits = [];
+      for (const t of toks) {
+        if (t.t === "ident" && renameMap.hasOwnProperty(t.v)) edits.push([t.p, t.v.length, renameMap[t.v]]);
+      }
+      out = src;
+      for (let i = edits.length - 1; i >= 0; i--) {
+        const [p, len, rep] = edits[i];
+        out = out.slice(0, p) + rep + out.slice(p + len);
+      }
+      return out;
+    } catch {
+      out = src;
+      for (const k of keys) {
+        out = out.replace(new RegExp("\\b" + k + "\\b", "g"), renameMap[k]);
+      }
+      return out;
+    }
+  }
+
+  CG.parser = { parse, evaluate, simplify, toSource, identifiers, tokenize, renameIdentifiers, FUNCS, CMP };
 })();
 
 
@@ -725,7 +1236,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     const parts = [];
     if (t.unit) parts.push(U.esc(t.unit));
     if (t.period) parts.push(U.esc(t.period));
-    return parts.length ? " " + parts.join(" ") : "";
+    return parts.length ? " " + parts.join(" \u00b7 ") : "";
   }
 
   // ctx = { model, results (the results MAP!), expanded:Set, numeric:bool, maxDepth:int }
@@ -746,7 +1257,9 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   }
 
   function nameSpan(name, model) {
-    return '<span class="eq-name ' + kindCls(name, model) + '" data-name="' + U.esc(name) + '">' + U.esc(name) + '</span>';
+    const t = model.termByName(name);
+    const unit = t && t.unit ? '<span class="eq-u">' + U.esc(t.unit) + "</span>" : "";
+    return '<span class="eq-name ' + kindCls(name, model) + '" data-name="' + U.esc(name) + '">' + U.esc(name) + unit + '</span>';
   }
   function numSpan(text) {
     return '<span class="eq-num">' + U.esc(text) + '</span>';
@@ -811,7 +1324,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     const { model, expanded, maxDepth, numeric } = ctx;
     const child = model.termByName(name);
     const cobj = model.constantByName(name);
-    if (cobj && numeric) return numSpan(U.fmt(Number(cobj.value)));
+    if (cobj && numeric) return numSpan(U.fmt(Number(cobj.value)) + (cobj.unit ? ' ' + U.esc(cobj.unit) : ""));
     const factor = child ? U.periodFactor(child.period || "once", parentTerm.period || "once") : 1;
     const expandHere = child && expanded.has(name) && depth < maxDepth;
     let core;
@@ -840,9 +1353,10 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       } else def = "";
       const r = results[t.name] || {};
       const val = r.value !== undefined ? U.fmt(r.value) : (r.error || "?");
-      const mark = t.name === model.root ? '<span class="eq-badge">root</span>' : "";
-      rows.push('<div class="eq-line"><span class="eq-name ' + t.kind + (t.name === model.root ? " sel" : "") + '" data-name="' + U.esc(t.name) + '">' + U.esc(t.name) + '</span>' +
-        '<span class="eq-op"> = </span>' + def + '<span class="eq-val">— ' + U.esc(val) + '</span>' + mark +
+      const mark = t.name === model.root ? '<span class="eq-badge root">root</span>' : "";
+      const unit = t.unit ? '<span class="eq-u">' + U.esc(t.unit) + "</span>" : "";
+      rows.push('<div class="eq-line"><span class="eq-name ' + t.kind + (t.name === model.root ? " sel" : "") + '" data-name="' + U.esc(t.name) + '">' + U.esc(t.name) + unit + '</span>' +
+        '<span class="eq-op"> = </span>' + def + '<span class="eq-val">\u2192 ' + U.esc(val) + '</span>' + mark +
         '<span class="eq-badge">' + U.esc(t.kind) + '</span></div>');
     }
     return rows.join("\n");
@@ -918,21 +1432,29 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       if (!ranks.has(r)) ranks.set(r, []);
       ranks.get(r).push(n);
     }
-    const rankKeys = [...ranks.keys()].sort((a, b) => a - b);
-    const COLS = 260, ROWS = 84, NODE_W = 150, NODE_H = 48;
+    const COLS = 260, ROWS = 88, NODE_W = 158, NODE_H = 60;
     const nodes = [];
     let maxW = NODE_W, maxH = NODE_H;
+    const inCount = new Map(), outCount = new Map();
+    for (const e of edges) {
+      outCount.set(e.from, (outCount.get(e.from) || 0) + 1);
+      inCount.set(e.to, (inCount.get(e.to) || 0) + 1);
+    }
     for (const t of items) {
       const r = rank(t.name);
       const idx = ranks.get(r).indexOf(t.name);
       const x = 60 + r * COLS;
       const y = 40 + idx * ROWS;
-      let w = NODE_W;
-      const est = 30 + t.name.length * 7.6 + (t.kind === "value" ? 0 : 8);
-      w = Math.max(NODE_W, Math.min(220, est));
+      const est = 34 + t.name.length * 7.6 + (t.kind === "value" ? 0 : 8);
+      const w = Math.max(NODE_W, Math.min(230, est));
       const rv = results[t.name] || {};
       const val = rv.value !== undefined ? U.fmt(rv.value) : (rv.error || "?");
-      nodes.push({ name: t.name, kind: t.kind, x, y, w, h: NODE_H, value: { text: val, err: !!rv.error }, period: t.period, unit: t.unit || "" });
+      nodes.push({
+        name: t.name, kind: t.kind, x, y, w, h: NODE_H,
+        value: { text: val, err: !!rv.error },
+        period: t.period || "", unit: t.unit || "",
+        incoming: inCount.get(t.name) || 0, outgoing: outCount.get(t.name) || 0
+      });
       maxW = Math.max(maxW, x + w); maxH = Math.max(maxH, y + NODE_H + 20);
     }
     if (groupNode) {
@@ -940,9 +1462,22 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       const idx = ranks.get(r) ? ranks.get(r).indexOf(groupNode.name) : 0;
       const x = 60 + r * COLS;
       const y = 40 + idx * ROWS;
-      nodes.push({ name: groupNode.name, kind: "group", x, y, w: NODE_W, h: NODE_H, value: (() => { const rv = results[groupNode.name] || {}; return { text: rv.value !== undefined ? U.fmt(rv.value) : (rv.error || "?"), err: !!rv.error }; })(), period: groupNode.period, unit: groupNode.unit || "" });
+      const rv = results[groupNode.name] || {};
+      nodes.push({
+        name: groupNode.name, kind: "group", x, y, w: NODE_W, h: NODE_H,
+        value: { text: rv.value !== undefined ? U.fmt(rv.value) : (rv.error || "?"), err: !!rv.error },
+        period: groupNode.period || "", unit: groupNode.unit || "",
+        incoming: inCount.get(groupNode.name) || 0, outgoing: outCount.get(groupNode.name) || 0
+      });
     }
-    return { nodes, edges, maxW, maxH };
+    // Content bounds so the graph can centre-fit the nodes (not left-pad).
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x - n.w / 2); maxX = Math.max(maxX, n.x + n.w / 2);
+      minY = Math.min(minY, n.y - n.h / 2); maxY = Math.max(maxY, n.y + n.h / 2);
+    }
+    const contentBox = { minX, minY, maxX, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
+    return { nodes, edges, maxW, maxH, contentBox };
   }
 
   CG.layout = { layoutGraph };
@@ -958,86 +1493,178 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   let svgRoot = null;
 
   function renderGraph(container, layout, handlers) {
-    const { nodes, edges, maxW, maxH } = layout;
-    const W = Math.max(1200, maxW + 120), H = Math.max(700, maxH + 120);
+    const { nodes, edges, contentBox } = layout;
+    const cb = contentBox || { minX: 0, minY: 0, maxX: 1200, maxY: 700, cx: 600, cy: 350, w: 1200, h: 700 };
+    const PAD = 80;
+    const W = cb.w + PAD * 2, H = cb.h + PAD * 2;
     const ns = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("viewBox", (cb.minX - PAD) + " " + (cb.minY - PAD) + " " + W + " " + H);
     svg.style.width = "100%"; svg.style.height = "100%";
     svgRoot = svg;
 
     const defs = document.createElementNS(ns, "defs");
-    const marker = document.createElementNS(ns, "marker");
-    marker.setAttribute("id", "arrow");
-    marker.setAttribute("viewBox", "0 0 10 10");
-    marker.setAttribute("refX", "9"); marker.setAttribute("refY", "5");
-    marker.setAttribute("markerWidth", "7"); marker.setAttribute("markerHeight", "7");
-    marker.setAttribute("orient", "auto-start-reverse");
-    const mp = document.createElementNS(ns, "path");
-    mp.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
-    mp.setAttribute("fill", "#4b5a6e");
-    marker.appendChild(mp);
-    defs.appendChild(marker);
+
+    // --- gradients ---
+    const edgeGrad = document.createElementNS(ns, "linearGradient");
+    edgeGrad.setAttribute("id", "cg-edgeGrad"); edgeGrad.setAttribute("x1", "0"); edgeGrad.setAttribute("y1", "0"); edgeGrad.setAttribute("x2", "1"); edgeGrad.setAttribute("y2", "0");
+    const e1 = document.createElementNS(ns, "stop"); e1.setAttribute("offset", "0%"); e1.setAttribute("stop-color", "#6e8bff");
+    const e2 = document.createElementNS(ns, "stop"); e2.setAttribute("offset", "100%"); e2.setAttribute("stop-color", "#38e1ff");
+    edgeGrad.appendChild(e1); edgeGrad.appendChild(e2);
+    defs.appendChild(edgeGrad);
+
+    const edgeGradG = document.createElementNS(ns, "linearGradient");
+    edgeGradG.setAttribute("id", "cg-edgeGradG"); edgeGradG.setAttribute("x1", "0"); edgeGradG.setAttribute("y1", "0"); edgeGradG.setAttribute("x2", "1"); edgeGradG.setAttribute("y2", "0");
+    const ge1 = document.createElementNS(ns, "stop"); ge1.setAttribute("offset", "0%"); ge1.setAttribute("stop-color", "#ffc857");
+    const ge2 = document.createElementNS(ns, "stop"); ge2.setAttribute("offset", "100%"); ge2.setAttribute("stop-color", "#ff9f43");
+    edgeGradG.appendChild(ge1); edgeGradG.appendChild(ge2);
+    defs.appendChild(edgeGradG);
+
+    const nodeGrad = document.createElementNS(ns, "linearGradient");
+    nodeGrad.setAttribute("id", "cg-nodeGrad"); nodeGrad.setAttribute("x1", "0"); nodeGrad.setAttribute("y1", "0"); nodeGrad.setAttribute("x2", "0"); nodeGrad.setAttribute("y2", "1");
+    const n1 = document.createElementNS(ns, "stop"); n1.setAttribute("offset", "0%"); n1.setAttribute("stop-color", "#1a2338");
+    const n2 = document.createElementNS(ns, "stop"); n2.setAttribute("offset", "100%"); n2.setAttribute("stop-color", "#101627");
+    nodeGrad.appendChild(n1); nodeGrad.appendChild(n2);
+    defs.appendChild(nodeGrad);
+
+    const nodeGradG = document.createElementNS(ns, "linearGradient");
+    nodeGradG.setAttribute("id", "cg-nodeGradG"); nodeGradG.setAttribute("x1", "0"); nodeGradG.setAttribute("y1", "0"); nodeGradG.setAttribute("x2", "0"); nodeGradG.setAttribute("y2", "1");
+    const gn1 = document.createElementNS(ns, "stop"); gn1.setAttribute("offset", "0%"); gn1.setAttribute("stop-color", "#2b2333");
+    const gn2 = document.createElementNS(ns, "stop"); gn2.setAttribute("offset", "100%"); gn2.setAttribute("stop-color", "#16121f");
+    nodeGradG.appendChild(gn1); nodeGradG.appendChild(gn2);
+    defs.appendChild(nodeGradG);
+
+    // --- arrow markers ---
+    const mk = (id, color) => {
+      const m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id); m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8.5"); m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "6.5"); m.setAttribute("markerHeight", "6.5");
+      m.setAttribute("orient", "auto-start-reverse");
+      const p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    };
+    defs.appendChild(mk("cg-arrow", "#6e8bff"));
+    defs.appendChild(mk("cg-arrow-group", "#ffc857"));
     svg.appendChild(defs);
 
-    // edges layer
+    // --- edges layer ---
     const edgeLayer = document.createElementNS(ns, "g");
     for (const e of edges) {
       const a = nodeById(nodes, e.from), b = nodeById(nodes, e.to);
       if (!a || !b) continue;
-      const x1 = a.x, y1 = a.y + a.h / 2;
-      const x2 = b.x, y2 = b.y - b.h / 2;
+      const x1 = a.x + a.w / 2, y1 = a.y;
+      const x2 = b.x - b.w / 2, y2 = b.y;
       const path = document.createElementNS(ns, "path");
-      const cls = e.groupEdge ? "edge group-edge" : "edge";
-      path.setAttribute("class", cls);
-      if (e.groupEdge) path.setAttribute("style", "stroke:#f59e0b;stroke-dasharray:4 3;");
-      // simple elbow: vertical from source bottom, horizontal mid, vertical to target top
-      const midY = (y1 + y2) / 2;
-      path.setAttribute("d", "M " + x1 + " " + y1 + " L " + x1 + " " + midY + " L " + x2 + " " + midY + " L " + x2 + " " + y2);
-      path.setAttribute("marker-end", "url(#arrow)");
+      path.setAttribute("class", e.groupEdge ? "edge group-edge" : "edge");
+      const dx = Math.max(10, x2 - x1);
+      if (x2 - x1 > 24) {
+        const c1x = x1 + dx * 0.55, c2x = x2 - dx * 0.55;
+        path.setAttribute("d", "M " + x1 + " " + y1 + " C " + c1x + " " + y1 + ", " + c2x + " " + y2 + ", " + x2 + " " + y2);
+      } else {
+        const midY = (y1 + y2) / 2;
+        path.setAttribute("d", "M " + x1 + " " + y1 + " L " + x1 + " " + midY + " L " + x2 + " " + midY + " L " + x2 + " " + y2);
+      }
+      path.setAttribute("marker-end", "url(#" + (e.groupEdge ? "cg-arrow-group" : "cg-arrow") + ")");
       path.dataset.from = e.from; path.dataset.to = e.to;
       edgeLayer.appendChild(path);
+
+      // period-conversion chip on the edge (e.g. x12, x52)
+      const f = U.periodFactor(a.period || "once", b.period || "once");
+      if (f !== 1 && Number.isFinite(f)) {
+        const t = document.createElementNS(ns, "text");
+        t.setAttribute("class", "edge-label" + (e.groupEdge ? " group" : ""));
+        t.setAttribute("x", (x1 + x2) / 2);
+        t.setAttribute("y", (y1 + y2) / 2 - 7);
+        t.setAttribute("text-anchor", "middle");
+        t.textContent = "\u00d7" + U.fmt(f);
+        edgeLayer.appendChild(t);
+      }
     }
     svg.appendChild(edgeLayer);
 
-    // node layer
+    // --- node layer ---
     const nodeLayer = document.createElementNS(ns, "g");
     const byName = new Map();
     for (const n of nodes) {
       const g = document.createElementNS(ns, "g");
-      g.setAttribute("class", "gnode" + (n.kind === "group" ? " group" : ""));
+      g.setAttribute("class", "gnode " + n.kind + (n.kind === "group" ? " group" : ""));
       g.setAttribute("transform", "translate(" + (n.x - n.w / 2) + "," + (n.y - n.h / 2) + ")");
       g.dataset.name = n.name;
+
       const rect = document.createElementNS(ns, "rect");
-      rect.setAttribute("width", n.w); rect.setAttribute("height", n.h);
+      rect.setAttribute("width", n.w); rect.setAttribute("height", n.h); rect.setAttribute("rx", "13");
+      rect.setAttribute("fill", "url(#" + (n.kind === "group" ? "cg-nodeGradG" : "cg-nodeGrad") + ")");
       g.appendChild(rect);
-      const t1 = document.createElementNS(ns, "text");
-      t1.setAttribute("class", "name");
-      t1.setAttribute("x", n.w / 2); t1.setAttribute("y", n.h / 2 - 4);
-      t1.setAttribute("text-anchor", "middle");
-      t1.textContent = n.name.length > 24 ? n.name.slice(0, 22) + "…" : n.name;
-      g.appendChild(t1);
-      const t2 = document.createElementNS(ns, "text");
-      t2.setAttribute("class", "v");
-      t2.setAttribute("x", n.w / 2); t2.setAttribute("y", n.h / 2 + 13);
-      t2.setAttribute("text-anchor", "middle");
-      const label = document.createElementNS(ns, "tspan");
-      label.textContent = (n.value.err ? "⚠ " : "") + (n.value.text || "");
-      t2.appendChild(label);
-      if (n.period) {
-        const p = document.createElementNS(ns, "tspan");
-        p.textContent = " " + n.period;
-        p.setAttribute("fill", "#64748b");
-        t2.appendChild(p);
+
+      // kind accent bar on the left edge
+      const kick = document.createElementNS(ns, "rect");
+      kick.setAttribute("class", "kicker " + n.kind);
+      kick.setAttribute("x", "4"); kick.setAttribute("y", "10"); kick.setAttribute("width", "3.5"); kick.setAttribute("height", n.h - 20); kick.setAttribute("rx", "1.75");
+      g.appendChild(kick);
+
+      // ports (visual connection sockets)
+      if (n.incoming > 0) {
+        const pIn = document.createElementNS(ns, "circle");
+        pIn.setAttribute("class", "port in"); pIn.setAttribute("cx", "0.5"); pIn.setAttribute("cy", n.h / 2); pIn.setAttribute("r", "3.4");
+        g.appendChild(pIn);
       }
-      g.appendChild(t2);
+      if (n.outgoing > 0) {
+        const pOut = document.createElementNS(ns, "circle");
+        pOut.setAttribute("class", "port out"); pOut.setAttribute("cx", n.w - 0.5); pOut.setAttribute("cy", n.h / 2); pOut.setAttribute("r", "3.4");
+        g.appendChild(pOut);
+      }
+
+      const name = document.createElementNS(ns, "text");
+      name.setAttribute("class", "name");
+      name.setAttribute("x", n.w / 2); name.setAttribute("y", 24);
+      name.setAttribute("text-anchor", "middle");
+      name.textContent = n.name.length > 26 ? n.name.slice(0, 24) + "\u2026" : n.name;
+      g.appendChild(name);
+
+      const val = document.createElementNS(ns, "text");
+      val.setAttribute("class", "v");
+      val.setAttribute("x", n.w / 2); val.setAttribute("y", 41);
+      val.setAttribute("text-anchor", "middle");
+      const t1 = document.createElementNS(ns, "tspan");
+      t1.textContent = (n.value.err ? "\u26a0 " : "") + (n.value.text || "");
+      t1.setAttribute("class", n.value.err ? "err" : "ok");
+      val.appendChild(t1);
+      g.appendChild(val);
+
+      const hasMeta = n.period || n.unit;
+      if (hasMeta) {
+        const meta = document.createElementNS(ns, "text");
+        meta.setAttribute("class", "meta");
+        meta.setAttribute("x", n.w / 2); meta.setAttribute("y", 53.5);
+        meta.setAttribute("text-anchor", "middle");
+        if (n.unit) {
+          const u = document.createElementNS(ns, "tspan");
+          u.setAttribute("class", "u");
+          u.textContent = n.unit;
+          meta.appendChild(u);
+        }
+        if (n.period) {
+          const p = document.createElementNS(ns, "tspan");
+          p.setAttribute("class", "p");
+          p.textContent = (n.unit ? "  \u00b7  " : "") + n.period;
+          meta.appendChild(p);
+        }
+        g.appendChild(meta);
+      }
+
       if (n.kind === "group") {
         const badge = document.createElementNS(ns, "text");
         badge.setAttribute("class", "badge");
-        badge.setAttribute("x", n.w - 16); badge.setAttribute("y", 16);
-        badge.textContent = "▸"; // drill-in chevron
+        badge.setAttribute("x", n.w - 12); badge.setAttribute("y", 14);
+        badge.setAttribute("text-anchor", "middle");
+        badge.textContent = "\u25b8";
         g.appendChild(badge);
       }
+
       g.addEventListener("click", (ev) => { ev.stopPropagation(); handlers.onSelect(n.name); });
       g.addEventListener("dblclick", (ev) => { ev.stopPropagation(); if (n.kind === "group") handlers.onEnter(n.name); });
       nodeLayer.appendChild(g);
@@ -1045,29 +1672,65 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     }
     svg.appendChild(nodeLayer);
 
-    // background click to deselect
+    // --- interaction: click blank to deselect, wheel zoom, right/middle drag pan ---
     svg.addEventListener("click", () => handlers.onBlank());
 
+    let pan = null;
+    const onMouseDown = (ev) => {
+      if (ev.button !== 2 && ev.button !== 1) return;
+      ev.preventDefault();
+      const vb = svg.viewBox.baseVal;
+      pan = { sx: ev.clientX, sy: ev.clientY, vx: vb.x, vy: vb.y };
+      svg.classList.add("panning");
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    };
+    const onMouseMove = (ev) => {
+      if (!pan) return;
+      ev.preventDefault();
+      const vb = svg.viewBox.baseVal;
+      const scale = vb.width / Math.max(1, svg.clientWidth);
+      vb.x = pan.vx - (ev.clientX - pan.sx) * scale;
+      vb.y = pan.vy - (ev.clientY - pan.sy) * scale;
+    };
+    const onMouseUp = () => {
+      if (!pan) return;
+      pan = null;
+      svg.classList.remove("panning");
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    svg.addEventListener("mousedown", onMouseDown);
+    svg.addEventListener("contextmenu", (ev) => ev.preventDefault());
 
-    container.innerHTML = "";
-    container.appendChild(svg);
-
-    // wheel zoom
     svg.addEventListener("wheel", (ev) => {
       ev.preventDefault();
       const delta = ev.deltaY > 0 ? 1.12 : 0.89;
       const vb = svg.viewBox.baseVal;
-      const cx = ev.offsetX / svg.clientWidth, cy = ev.offsetY / svg.clientHeight;
-      const nw = Math.min(20000, Math.max(300, vb.width * delta));
+      const cx = ev.offsetX / Math.max(1, svg.clientWidth), cy = ev.offsetY / Math.max(1, svg.clientHeight);
+      const nw = Math.min(30000, Math.max(240, vb.width * delta));
       const nh = nw * vb.height / vb.width;
       vb.x += (cx * vb.width - cx * nw);
       vb.y += (cy * vb.height - cy * nh);
       vb.width = nw; vb.height = nh;
     }, { passive: false });
 
-    // expose for zoom buttons
+    container.innerHTML = "";
+    container.appendChild(svg);
+
+    // --- centred fit ---
+    const fit = () => {
+      const vb = svg.viewBox.baseVal;
+      const bw = Math.max(cb.w, 320), bh = Math.max(cb.h, 220);
+      const w = bw + PAD * 2, h = bh + PAD * 2;
+      vb.x = cb.cx - w / 2;
+      vb.y = cb.cy - h / 2;
+      vb.width = w;
+      vb.height = h;
+    };
     container.__cgSvg = svg;
-    container.__cgReset = () => { const vb = svg.viewBox.baseVal; vb.x = 0; vb.y = 0; vb.width = W; vb.height = H; };
+    container.__cgReset = fit;
+    container.__cgFit = fit;
     return { svg, W, H };
   }
 
@@ -1079,13 +1742,16 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     for (const g of svg.querySelectorAll(".gnode")) {
       g.classList.toggle("sel", g.dataset.name === selected);
     }
+    for (const p of svg.querySelectorAll(".edge")) {
+      p.classList.toggle("edge-hl", p.dataset.from === selected || p.dataset.to === selected);
+    }
   }
 
   function zoomBy(container, factor) {
     const svg = container.__cgSvg;
     if (!svg) return;
     const vb = svg.viewBox.baseVal;
-    const nw = Math.min(20000, Math.max(300, vb.width * factor));
+    const nw = Math.min(30000, Math.max(240, vb.width * factor));
     vb.x += (vb.width - nw) / 2;
     vb.y += (vb.height - nw * vb.height / vb.width) / 2;
     vb.width = nw;
@@ -1093,6 +1759,408 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   }
 
   CG.graph = { renderGraph, highlightSelection, zoomBy };
+})();
+
+(() => {
+  "use strict";
+  const CG = (typeof window !== "undefined" ? window : globalThis).CalcGraph =
+    (typeof window !== "undefined" ? window : globalThis).CalcGraph || {};
+  const U = CG.util;
+
+  // tiny DOM helpers — also defined in 07-inspector; kept here so the units
+  // UI (pickers / manager / sidebar section) works before that module loads.
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  if (!CG.ui) CG.ui = { el, clear };
+
+  const UNITS_KEY = "calcgraph.units.v1";
+
+  // ------------------------------------------------------------------
+  // Built-in default unit library (user can add custom units on top).
+  // Quantities cover the everyday engineering / business families:
+  // time, length, breadth, area, volume, mass, force, pressure, energy,
+  // power, temperature, angle, currency, ratio, count.
+  // ------------------------------------------------------------------
+  const BUILTIN = [
+    { id: "u-t-s",   quantity: "Time",        name: "second",           symbol: "s" },
+    { id: "u-t-min", quantity: "Time",        name: "minute",           symbol: "min" },
+    { id: "u-t-h",   quantity: "Time",        name: "hour",             symbol: "hr" },
+    { id: "u-t-day", quantity: "Time",        name: "day",              symbol: "day" },
+    { id: "u-t-wk",  quantity: "Time",        name: "week",             symbol: "wk" },
+    { id: "u-t-mo",  quantity: "Time",        name: "month",            symbol: "mo" },
+    { id: "u-t-yr",  quantity: "Time",        name: "year",             symbol: "yr" },
+    { id: "u-l-mm",  quantity: "Length",      name: "millimetre",       symbol: "mm" },
+    { id: "u-l-cm",  quantity: "Length",      name: "centimetre",       symbol: "cm" },
+    { id: "u-l-m",   quantity: "Length",      name: "metre",            symbol: "m" },
+    { id: "u-l-km",  quantity: "Length",      name: "kilometre",        symbol: "km" },
+    { id: "u-l-in",  quantity: "Length",      name: "inch",             symbol: "in" },
+    { id: "u-l-ft",  quantity: "Length",      name: "foot",             symbol: "ft" },
+    { id: "u-b-mm",  quantity: "Breadth",     name: "millimetre",       symbol: "mm" },
+    { id: "u-b-cm",  quantity: "Breadth",     name: "centimetre",       symbol: "cm" },
+    { id: "u-b-m",   quantity: "Breadth",     name: "metre",            symbol: "m" },
+    { id: "u-b-in",  quantity: "Breadth",     name: "inch",             symbol: "in" },
+    { id: "u-b-ft",  quantity: "Breadth",     name: "foot",             symbol: "ft" },
+    { id: "u-a-mm2", quantity: "Area",        name: "square millimetre",symbol: "mm\u00b2" },
+    { id: "u-a-cm2", quantity: "Area",        name: "square centimetre",symbol: "cm\u00b2" },
+    { id: "u-a-m2",  quantity: "Area",        name: "square metre",     symbol: "m\u00b2" },
+    { id: "u-a-km2", quantity: "Area",        name: "square kilometre", symbol: "km\u00b2" },
+    { id: "u-a-in2", quantity: "Area",        name: "square inch",      symbol: "in\u00b2" },
+    { id: "u-a-ft2", quantity: "Area",        name: "square foot",      symbol: "ft\u00b2" },
+    { id: "u-v-mm3", quantity: "Volume",      name: "cubic millimetre", symbol: "mm\u00b3" },
+    { id: "u-v-cm3", quantity: "Volume",      name: "cubic centimetre", symbol: "cm\u00b3" },
+    { id: "u-v-m3",  quantity: "Volume",      name: "cubic metre",      symbol: "m\u00b3" },
+    { id: "u-v-l",   quantity: "Volume",      name: "litre",            symbol: "L" },
+    { id: "u-v-ml",  quantity: "Volume",      name: "millilitre",       symbol: "mL" },
+    { id: "u-v-gal", quantity: "Volume",      name: "US gallon",        symbol: "gal" },
+    { id: "u-m-g",   quantity: "Mass",        name: "gram",             symbol: "g" },
+    { id: "u-m-kg",  quantity: "Mass",        name: "kilogram",         symbol: "kg" },
+    { id: "u-m-t",   quantity: "Mass",        name: "tonne",            symbol: "t" },
+    { id: "u-m-lb",  quantity: "Mass",        name: "pound",            symbol: "lb" },
+    { id: "u-f-n",   quantity: "Force",       name: "newton",           symbol: "N" },
+    { id: "u-f-kn",  quantity: "Force",       name: "kilonewton",       symbol: "kN" },
+    { id: "u-f-kgf", quantity: "Force",       name: "kilogram-force",   symbol: "kgf" },
+    { id: "u-f-lbf", quantity: "Force",       name: "pound-force",      symbol: "lbf" },
+    { id: "u-p-pa",  quantity: "Pressure",    name: "pascal",           symbol: "Pa" },
+    { id: "u-p-kpa", quantity: "Pressure",    name: "kilopascal",       symbol: "kPa" },
+    { id: "u-p-mpa", quantity: "Pressure",    name: "megapascal",       symbol: "MPa" },
+    { id: "u-p-gpa", quantity: "Pressure",    name: "gigapascal",       symbol: "GPa" },
+    { id: "u-p-nmm", quantity: "Pressure",    name: "newton per sq mm", symbol: "N/mm\u00b2" },
+    { id: "u-p-psi", quantity: "Pressure",    name: "pound per sq in",  symbol: "psi" },
+    { id: "u-p-bar", quantity: "Pressure",    name: "bar",              symbol: "bar" },
+    { id: "u-e-j",   quantity: "Energy",      name: "joule",            symbol: "J" },
+    { id: "u-e-kj",  quantity: "Energy",      name: "kilojoule",        symbol: "kJ" },
+    { id: "u-e-mj",  quantity: "Energy",      name: "megajoule",        symbol: "MJ" },
+    { id: "u-e-kwh", quantity: "Energy",      name: "kilowatt-hour",    symbol: "kWh" },
+    { id: "u-w-w",   quantity: "Power",       name: "watt",             symbol: "W" },
+    { id: "u-w-kw",  quantity: "Power",       name: "kilowatt",         symbol: "kW" },
+    { id: "u-w-mw",  quantity: "Power",       name: "megawatt",         symbol: "MW" },
+    { id: "u-w-hp",  quantity: "Power",       name: "horsepower",       symbol: "hp" },
+    { id: "u-temp-c",quantity: "Temperature", name: "celsius",          symbol: "\u00b0C" },
+    { id: "u-temp-f",quantity: "Temperature", name: "fahrenheit",       symbol: "\u00b0F" },
+    { id: "u-temp-k",quantity: "Temperature", name: "kelvin",           symbol: "K" },
+    { id: "u-ang-d", quantity: "Angle",       name: "degree",           symbol: "deg" },
+    { id: "u-ang-r", quantity: "Angle",       name: "radian",           symbol: "rad" },
+    { id: "u-c-usd", quantity: "Currency",    name: "US dollar",        symbol: "USD" },
+    { id: "u-c-eur", quantity: "Currency",    name: "euro",             symbol: "EUR" },
+    { id: "u-c-gbp", quantity: "Currency",    name: "pound sterling",   symbol: "GBP" },
+    { id: "u-c-jpy", quantity: "Currency",    name: "yen",              symbol: "JPY" },
+    { id: "u-c-inr", quantity: "Currency",    name: "rupee",            symbol: "INR" },
+    { id: "u-c-pkr", quantity: "Currency",    name: "Pakistani rupee",  symbol: "PKR" },
+    { id: "u-r-pct", quantity: "Ratio",       name: "percent",          symbol: "%" },
+    { id: "u-r-fr",  quantity: "Ratio",       name: "ratio",            symbol: "ratio" },
+    { id: "u-n-pcs", quantity: "Count",       name: "pieces",           symbol: "pcs" },
+    { id: "u-n-it",  quantity: "Count",       name: "items",            symbol: "items" }
+  ];
+
+  function builtins() { return BUILTIN.map(u => ({ ...u, builtin: true })); }
+
+  // load() always returns the built-ins + any custom units saved globally.
+  function load() {
+    try {
+      const raw = localStorage.getItem(UNITS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) return builtins();
+      const merged = builtins();
+      const seen = new Set(merged.map(u => u.id));
+      for (const u of arr) {
+        if (u && u.symbol && !seen.has(u.id)) { merged.push({ ...u, builtin: !!u.builtin }); seen.add(u.id); }
+      }
+      return merged;
+    } catch { return builtins(); }
+  }
+  function save(arr) { try { localStorage.setItem(UNITS_KEY, JSON.stringify(arr)); } catch {} }
+  function quantities(lib) {
+    const qs = [];
+    for (const u of lib) if (!qs.includes(u.quantity)) qs.push(u.quantity);
+    return qs;
+  }
+  function symbolsFor(lib, quantity) { return lib.filter(u => u.quantity === quantity).map(u => u.symbol); }
+  function removeUnit(id) { const lib = load().filter(u => u.builtin || u.id !== id); save(lib); return lib; }
+  function addCustom(entry) {
+    const lib = load();
+    if (!entry.quantity || !entry.symbol) throw new Error("Custom unit needs a quantity and a symbol.");
+    const dup = lib.some(u => u.quantity === entry.quantity && u.symbol === entry.symbol);
+    if (dup) throw new Error("That symbol already exists in the '" + entry.quantity + "' library.");
+    const u = { id: U.uid(), quantity: entry.quantity, name: entry.name || entry.symbol, symbol: entry.symbol, builtin: false };
+    lib.push(u); save(lib); return u;
+  }
+
+  // ------------------------------------------------------------------
+  // Period select — always starts empty ("no period"). Nothing is
+  // auto-assigned: the user opts in.
+  // ------------------------------------------------------------------
+  function periodSelect(existing, onChange) {
+    const sel = el("select", "");
+    const none = el("option", "", "\u2014 no period \u2014");
+    none.value = "";
+    if (!existing) none.selected = true;
+    sel.appendChild(none);
+    for (const p of U.PERIOD_ORDER) {
+      const o = el("option", "", p);
+      o.value = p;
+      if (existing === p) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener("change", () => onChange(sel.value));
+    return sel;
+  }
+
+  // ------------------------------------------------------------------
+  // Unit picker: quantity -> unit -> custom (saved to the global library).
+  // ------------------------------------------------------------------
+  function renderUnitPicker(app, opts) {
+    opts = opts || {};
+    const wrap = el("div", "unit-pick");
+    const qSel = el("select", "");
+    const uSel = el("select", "");
+    const customBox = el("div", "unit-custom");
+    customBox.style.display = "none";
+    const ctx = { current: opts.value || "" };
+
+    const fillQ = () => {
+      clear(qSel);
+      const lib = load();
+      const qs = quantities(lib);
+      const q0 = el("option", "", "\u2014 quantity \u2014"); q0.value = "";
+      qSel.appendChild(q0);
+      let currentQ = "";
+      for (const u of lib) if (u.symbol === ctx.current) { currentQ = u.quantity; break; }
+      for (const q of qs) {
+        const o = el("option", "", q);
+        if (q === currentQ) o.selected = true;
+        qSel.appendChild(o);
+      }
+      fillU();
+    };
+    const fillU = () => {
+      clear(uSel);
+      const lib = load();
+      const q = qSel.value || "";
+      const none = el("option", "", "\u2014 unit \u2014"); none.value = "";
+      uSel.appendChild(none);
+      for (const u of lib.filter(x => x.quantity === q)) {
+        const o = el("option", "", u.symbol + "  \u00b7  " + u.name);
+        o.value = u.symbol;
+        if (ctx.current === u.symbol) o.selected = true;
+        uSel.appendChild(o);
+      }
+      const cust = el("option", "", "\uff0b Custom\u2026"); cust.value = "__custom__";
+      uSel.appendChild(cust);
+    };
+
+    // custom unit row
+    const cName = el("input", ""); cName.placeholder = "name (e.g. supertonne)"; cName.style.width = "150px";
+    const cSym = el("input", ""); cSym.placeholder = "symbol (e.g. st)"; cSym.style.width = "90px";
+    cSym.style.fontFamily = "var(--mono)";
+    const cAdd = el("button", "btn small primary", "Add to library & use");
+    customBox.appendChild(cName); customBox.appendChild(cSym); customBox.appendChild(cAdd);
+    customBox.appendChild(el("span", "meta", "saved in the global library"));
+
+    cAdd.addEventListener("click", () => {
+      if (!qSel.value) { app.toast("Choose a quantity first.", "err"); return; }
+      const symbol = cSym.value.trim();
+      if (!symbol) { app.toast("Enter a symbol for the custom unit.", "err"); return; }
+      try {
+        const u = addCustom({ quantity: qSel.value, name: cName.value.trim() || symbol, symbol });
+        ctx.current = symbol;
+        customBox.style.display = "none";
+        fillQ(); fillU();
+        if (opts.onPick) opts.onPick(symbol);
+        app.toast("Custom unit '" + symbol + "' saved to the global library.", "ok");
+      } catch (e) { app.toast(e.message, "err"); }
+    });
+
+    qSel.addEventListener("change", () => { ctx.current = ""; customBox.style.display = "none"; fillU(); });
+    uSel.addEventListener("change", () => {
+      if (uSel.value === "__custom__") { customBox.style.display = ""; cName.focus(); return; }
+      customBox.style.display = "none";
+      ctx.current = uSel.value || "";
+      if (opts.onPick) opts.onPick(uSel.value || "");
+    });
+
+    const manage = el("button", "btn small", "\u2699 Units\u2026");
+    manage.addEventListener("click", () => openManager(app, () => { const keep = ctx.current; fillQ(); ctx.current = keep; fillU(); }));
+
+    wrap.appendChild(qSel); wrap.appendChild(uSel); wrap.appendChild(manage); wrap.appendChild(customBox);
+    fillQ();
+    return wrap;
+  }
+
+  // ------------------------------------------------------------------
+  // Units manager modal — browse / add / delete the global unit library.
+  // ------------------------------------------------------------------
+  function openManager(app, onDone) {
+    const backdrop = el("div", "modal-backdrop");
+    const modal = el("div", "modal wide");
+    const h = el("h2", "", "");
+    h.appendChild(el("span", "", "Global unit library"));
+    const closeX = el("button", "close", "\u2715");
+    closeX.addEventListener("click", () => backdrop.remove());
+    h.appendChild(closeX);
+    modal.appendChild(h);
+    const body = el("div", "m-body");
+    modal.appendChild(body);
+
+    body.appendChild(el("p", "notice dim", "These units are saved in this browser and available in every model. Pick a quantity + unit for any term or constant, or add your own below."));
+
+    const addCard = el("div", "side-section");
+    addCard.appendChild(el("h3", "side-section-title", "Add a custom unit"));
+    const row = el("div", "flex-row");
+    const qIn = el("input", ""); qIn.placeholder = "Quantity (e.g. Density)"; qIn.style.width = "150px";
+    const nIn = el("input", ""); nIn.placeholder = "Name (e.g. kilonewton-metre)"; nIn.style.width = "190px";
+    const sIn = el("input", ""); sIn.placeholder = "Symbol (e.g. kN\u00b7m)"; sIn.style.width = "110px"; sIn.style.fontFamily = "var(--mono)";
+    const addBtn = el("button", "btn primary", "Add");
+    addBtn.addEventListener("click", () => {
+      if (!qIn.value.trim() || !sIn.value.trim()) { app.toast("Quantity and symbol are required.", "err"); return; }
+      try {
+        addCustom({ quantity: qIn.value.trim(), name: nIn.value.trim() || sIn.value.trim(), symbol: sIn.value.trim() });
+        app.toast("Unit added to the global library.", "ok");
+        qIn.value = ""; nIn.value = ""; sIn.value = "";
+        repaint();
+      } catch (e) { app.toast(e.message, "err"); }
+    });
+    row.appendChild(qIn); row.appendChild(nIn); row.appendChild(sIn); row.appendChild(addBtn);
+    addCard.appendChild(row);
+    body.appendChild(addCard);
+
+    const list = el("div", "");
+    body.appendChild(list);
+    const repaint = () => {
+      clear(list);
+      const lib = load();
+      for (const q of quantities(lib)) {
+        const sec = el("div", "side-section");
+        sec.appendChild(el("h3", "side-section-title", q));
+        const chips = el("div", "flex-row");
+        for (const u of lib.filter(x => x.quantity === q)) {
+          const c = el("span", "chip" + (u.builtin ? "" : " constant"), u.symbol + "  \u00b7  " + u.name);
+          c.title = u.builtin ? "built-in (cannot be removed)" : "custom unit";
+          if (!u.builtin) {
+            const x = el("button", "btn small danger", "\u2715");
+            x.addEventListener("click", () => { removeUnit(u.id); repaint(); app.toast("Removed '" + u.symbol + "'."); });
+            c.appendChild(x);
+          }
+          chips.appendChild(c);
+        }
+        sec.appendChild(chips);
+        list.appendChild(sec);
+      }
+    };
+    repaint();
+
+    const foot = el("div", "m-foot", "");
+    const done = el("button", "btn primary", "Done");
+    done.addEventListener("click", () => { backdrop.remove(); if (onDone) onDone(); });
+    foot.appendChild(done);
+    modal.appendChild(foot);
+
+    document.body.appendChild(backdrop); backdrop.appendChild(modal);
+    qIn.focus();
+  }
+
+  // ------------------------------------------------------------------
+  // Sidebar section — global units overview.
+  // ------------------------------------------------------------------
+  function renderSection(container, app) {
+    const sec = el("div", "side-section");
+    sec.appendChild(el("h3", "side-section-title", "UNIT LIBRARY (global)"));
+    const lib = load();
+    const customCount = lib.filter(u => !u.builtin).length;
+    const chips = el("div", "flex-row");
+    for (const q of quantities(lib).slice(0, 12)) {
+      const c = el("span", "chip", q);
+      c.title = symbolsFor(lib, q).join("  \u00b7  ");
+      const cnt = el("span", "meta", " " + symbolsFor(lib, q).length);
+      c.appendChild(cnt);
+      c.addEventListener("click", () => openManager(app));
+      chips.appendChild(c);
+    }
+    sec.appendChild(chips);
+    const mgr = el("button", "btn small", "\u2699 Manage units" + (customCount ? "  \u00b7  " + customCount + " custom" : ""));
+    mgr.addEventListener("click", () => openManager(app));
+    sec.appendChild(mgr);
+    container.appendChild(sec);
+  }
+
+  // ------------------------------------------------------------------
+  // Derived-unit analysis: walk the formula AST and combine the units of
+  // referenced terms/constants so the suggested unit "matches the formula".
+  // ------------------------------------------------------------------
+  const SUP = { "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074", "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079" };
+  function needsParen(s) { return /[\u00b7/]/.test(s); }
+  function mulU(a, b) {
+    if (!a) return b; if (!b) return a;
+    const pa = needsParen(a), pb = needsParen(b);
+    return (pa ? "(" + a + ")" : a) + "\u00b7" + (pb ? "(" + b + ")" : b);
+  }
+  function divU(a, b) {
+    if (!a && !b) return ""; if (!b) return a; if (!a) return "1/" + b;
+    return (needsParen(a) ? "(" + a + ")" : a) + "/" + (needsParen(b) ? "(" + b + ")" : b);
+  }
+  function powU(a, n) {
+    if (!a || n === 1) return a || "";
+    const endsWithDigit = /[\u00b2\u00b3\u2070-\u2079\d]$/.test(a);
+    const base = needsParen(a) || endsWithDigit ? "(" + a + ")" : a;
+    if (n >= 0 && n <= 9) return base + SUP[String(n)];
+    return base + "^" + n;
+  }
+  function unitOfAst(ast, getUnit) {
+    switch (ast.t) {
+      case "num": return "";
+      case "name": return getUnit(ast.n) || "";
+      case "un": return unitOfAst(ast.e, getUnit);
+      case "bin": {
+        const l = unitOfAst(ast.l, getUnit), r = unitOfAst(ast.r, getUnit);
+        if (ast.op === "+" || ast.op === "-") {
+          if (!l && !r) return "";
+          if (!l) return r; if (!r) return l;
+          return l === r ? l : "mixed (" + l + " vs " + r + ")";
+        }
+        if (ast.op === "*") return mulU(l, r);
+        if (ast.op === "/") return divU(l, r);
+        if (ast.op === "^") {
+          if (ast.r.t === "num" && Number.isInteger(ast.r.v)) return powU(l, ast.r.v);
+          return l;
+        }
+        return "";
+      }
+      case "call": {
+        // careful: keep raw args so if(cond, a, b) still indexes correctly
+        const raw = ast.args.map(a => unitOfAst(a, getUnit));
+        if (ast.fn === "if") return raw[1] || raw[2] || "";
+        const args = raw.filter(Boolean);
+        if (ast.fn === "sum" || ast.fn === "avg" || ast.fn === "min" || ast.fn === "max") {
+          return new Set(args).size <= 1 ? (args[0] || "") : "mixed";
+        }
+        return args[0] || "";
+      }
+    }
+    return "";
+  }
+  function deriveUnit(formulaSrc, model) {
+    if (!formulaSrc || !model) return "";
+    let ast;
+    try { ast = CG.parser.parse(formulaSrc); } catch { return ""; }
+    const getUnit = (n) => {
+      const t = model.termByName(n);
+      if (t && t.unit) return t.unit;
+      const c = model.constantByName(n);
+      if (c && c.unit) return c.unit;
+      return "";
+    };
+    try { return unitOfAst(CG.parser.simplify(ast), getUnit); } catch { return ""; }
+  }
+
+  CG.units = {
+    load, save, builtins, quantities, symbolsFor, addCustom, removeUnit,
+    periodSelect, renderUnitPicker, openManager, renderSection,
+    deriveUnit, unitOfAst
+  };
 })();
 
 (() => {
@@ -1115,40 +2183,51 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     const { model, results, selected } = app.state();
     clear(container);
     if (!selected || !model.termByName(selected)) {
-      container.appendChild(el("div", "empty-hint", "Click any term in the graph, equation, or outline to inspect it here.\n\nYou can edit its value, formula, description, period, slider and snapshots."));
+      container.appendChild(el("div", "empty-hint", "Click any term in the graph, equation, or outline to inspect it here.\n\nYou can rename it, edit its value or formula, add a unit (quantity + symbol), period, slider and snapshots."));
       return;
     }
     const term = model.termByName(selected);
     const rr = results && results.results ? results.results : {};
     const r = rr[selected] || {};
 
-    container.appendChild(el("h3", "side-section-title", "TERM"));
-
-    // name + kind + delete
-    const head = el("div", "side-section");
+    // ---- header card ----
+    const head = el("div", "insp-head");
     const nameRow = el("div", "flex-row");
-    nameRow.appendChild(el("strong", "", term.name));
-    if (term.name === model.root) nameRow.appendChild(el("span", "eq-badge", "root"));
+    const nameInput = el("input", "insp-name");
+    nameInput.type = "text";
+    nameInput.value = term.name;
+    nameInput.title = "Rename this term — every reference in the model is updated automatically";
+    nameInput.addEventListener("change", () => {
+      const v = nameInput.value.trim();
+      if (v === term.name) { nameInput.value = term.name; return; }
+      app.renameTerm(term.name, v);
+      const cur = app.state().model.termByName(term.name);
+      nameInput.value = cur ? cur.name : v;
+    });
+    nameInput.addEventListener("keydown", (ev) => { if (ev.key === "Enter") nameInput.blur(); });
+    nameRow.appendChild(nameInput);
+    if (term.name === model.root) nameRow.appendChild(el("span", "badge k-group", "\u2605 root"));
     head.appendChild(nameRow);
+
     const kindRow = el("div", "flex-row");
-    kindRow.appendChild(el("span", "badge", term.kind));
+    kindRow.appendChild(el("span", "badge k-" + term.kind, term.kind === "formula" ? "\u0192 formula" : term.kind));
     if (term.period) kindRow.appendChild(el("span", "badge", term.period));
-    if (term.unit) kindRow.appendChild(el("span", "badge", term.unit));
+    if (term.unit) kindRow.appendChild(el("span", "badge k-constant", term.unit));
     head.appendChild(kindRow);
-    const valPill = el("div", "kv");
-    const dd = el("dd", "");
+
+    const valPill = el("div", "kv value-pill");
+    const dd = el("dd", "big");
     const valText = r.value !== undefined ? U.fmt(r.value) : (r.error || "?");
-    dd.style.cssText = "font-size:20px;font-weight:700;color:" + (r.value !== undefined ? "var(--ok)" : "var(--err)") + ";";
-    dd.textContent = valText;
+    dd.textContent = valText + (term.unit ? " " + term.unit : "") + (term.period ? "  \u00b7 " + term.period : "");
     valPill.appendChild(el("dt", "", "Current value"));
     valPill.appendChild(dd);
     if (r.error) { const er = el("div", "notice err", r.error); head.appendChild(er); }
     head.appendChild(valPill);
     container.appendChild(head);
 
-    // description (editable)
+    // ---- description ----
     const descSec = el("div", "side-section");
-    descSec.appendChild(el("h3", "side-section-title", "WHAT THIS TERM DOES"));
+    descSec.appendChild(el("h3", "side-section-title", "What this term does"));
     const desc = el("textarea", "field", "");
     desc.rows = 3;
     desc.value = term.description || "";
@@ -1157,23 +2236,23 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     descSec.appendChild(desc);
     container.appendChild(descSec);
 
-    // per-kind editor
+    // ---- per-kind editor ----
     const ed = el("div", "side-section");
     if (term.kind === "value") renderValueEditor(ed, term, r, app);
     else if (term.kind === "formula") renderFormulaEditor(ed, term, r, app);
     else renderGroupEditor(ed, term, r, app);
     container.appendChild(ed);
 
-    // used by
+    // ---- used by ----
     const parents = model.parentsOf(term.name);
     if (parents.length) {
       const sec = el("div", "side-section");
-      sec.appendChild(el("h3", "side-section-title", "USED BY / FEEDS INTO"));
+      sec.appendChild(el("h3", "side-section-title", "Used by / feeds into"));
       const chain = pathToRoot(model, term.name);
       const pathRow = el("div", "flex-row");
       chain.forEach((n, i) => {
         pathRow.appendChild(el("span", "crumb" + (i === chain.length - 1 ? " current" : ""), n));
-        if (i < chain.length - 1) pathRow.appendChild(el("span", "crumb-sep", "→"));
+        if (i < chain.length - 1) pathRow.appendChild(el("span", "crumb-sep", "\u2192"));
       });
       sec.appendChild(pathRow);
       const chipRow = el("div", "flex-row");
@@ -1186,15 +2265,15 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       container.appendChild(sec);
     }
 
-    // contributions from children (only for formula/group)
+    // ---- contributions ----
     const contribs = results.contrib ? results.contrib.filter(c => c.parent === term.name) : [];
     if (contribs.length) {
       const sec = el("div", "side-section");
-      sec.appendChild(el("h3", "side-section-title", "WHAT FEEDS THIS TERM"));
+      sec.appendChild(el("h3", "side-section-title", "What feeds this term"));
       for (const c of contribs) {
         const row = el("div", "kv");
         const d = el("dd", "");
-        d.textContent = U.fmt(c.value) + (c.factor !== 1 ? "  (×" + U.fmt(c.factor) + ")" : "");
+        d.textContent = U.fmt(c.value) + (c.factor !== 1 ? "  (\u00d7" + U.fmt(c.factor) + ")" : "");
         row.appendChild(el("dt", "", c.child));
         row.appendChild(d);
         sec.appendChild(row);
@@ -1202,9 +2281,9 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       container.appendChild(sec);
     }
 
-    // danger zone
+    // ---- danger zone ----
     const dz = el("div", "side-section");
-    const del = el("button", "btn danger small", "Delete term");
+    const del = el("button", "btn danger small", "\u232b Delete term");
     del.addEventListener("click", () => {
       if (confirm("Delete term '" + term.name + "'? Referencing terms will break if they use it.")) app.deleteTerm(term.name);
     });
@@ -1224,36 +2303,47 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     return path;
   }
 
+  // ---- unit + period block shared by every editor ----
+  function renderUnitPeriod(ed, term, app) {
+    const box = el("div", "");
+    const uLabel = el("div", "field-label-row");
+    uLabel.appendChild(el("span", "", "Unit (quantity \u2192 symbol)"));
+    box.appendChild(uLabel);
+
+    const picker = CG.units.renderUnitPicker(app, {
+      value: term.unit || "",
+      onPick: (sym) => app.updateTerm(term.name, { unit: sym }, true)
+    });
+    box.appendChild(picker);
+
+    const pLabel = el("div", "field-label-row");
+    pLabel.appendChild(el("span", "", "Period (time-bucket conversion)"));
+    box.appendChild(pLabel);
+    const pSel = CG.units.periodSelect(term.period || "", (v) => app.updateTerm(term.name, { period: v || "" }, true));
+    box.appendChild(pSel);
+    ed.appendChild(box);
+  }
+
   function renderValueEditor(ed, term, r, app) {
-    ed.appendChild(el("h3", "side-section-title", "VALUE"));
+    ed.appendChild(el("h3", "side-section-title", "Value"));
     const num = el("input", "");
     num.type = "number"; num.step = "any"; num.value = term.value;
-    num.style.width = "100%";
+    num.style.width = "100%"; num.style.fontWeight = "700";
     num.addEventListener("input", () => app.updateTerm(term.name, { value: Number(num.value) }, true));
     ed.appendChild(num);
 
-    const row = el("div", "flex-row");
-    const selP = el("select", "");
-    U.PERIOD_ORDER.forEach(p => { const o = el("option", "", p); if (term.period === p) o.selected = true; selP.appendChild(o); });
-    selP.addEventListener("change", () => app.updateTerm(term.name, { period: selP.value }));
-    row.appendChild(selP);
-    const unit = el("input", "");
-    unit.placeholder = "unit (USD, m, MPa...)"; unit.value = term.unit || "";
-    unit.addEventListener("input", () => app.updateTerm(term.name, { unit: unit.value }, true));
-    row.appendChild(unit);
-    ed.appendChild(row);
-
-    renderSlider(ed, term, app, app.updateTerm);
+    renderUnitPeriod(ed, term, app);
+    renderSlider(ed, term, app);
     renderSnapshots(ed, term, app);
   }
 
   function renderSlider(box, term, app) {
     const s = term.slider;
     const sec = el("div", "");
-    sec.style.marginTop = "8px";
+    sec.style.marginTop = "10px";
     if (s) {
       const title = el("div", "flex-row");
-      title.appendChild(el("span", "", "Slider: " + U.fmt(Number(term.value))));
+      title.appendChild(el("span", "", "Slider"));
       const off = el("button", "btn small", "Remove slider");
       off.addEventListener("click", () => { const t = app.state().model.termByName(term.name); delete t.slider; app.commit(); });
       title.appendChild(off);
@@ -1270,7 +2360,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       sec.appendChild(srow);
       box.appendChild(sec);
     } else {
-      const add = el("button", "btn small", "⚙ Add slider (min/max/step)");
+      const add = el("button", "btn small", "\u2699 Add slider (min / max / step)");
       add.addEventListener("click", () => {
         const t = app.state().model.termByName(term.name);
         const v = Number(t.value) || 0;
@@ -1285,11 +2375,11 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     const snaps = Array.isArray(term.snapshots) ? term.snapshots : [];
     if (snaps.length) {
       const sec = el("div", "");
-      sec.style.marginTop = "8px";
+      sec.style.marginTop = "10px";
       sec.appendChild(el("div", "", "Snapshots (click to apply)"));
       const row = el("div", "flex-row");
       for (const s of snaps) {
-        const c = el("span", "chip", s.label + " = " + U.fmt(Number(s.value)));
+        const c = el("span", "chip", s.label + "  =  " + U.fmt(Number(s.value)));
         if (Number(s.value) === Number(term.value)) c.classList.add("selected");
         c.addEventListener("click", () => app.updateTerm(term.name, { value: Number(s.value) }, true));
         row.appendChild(c);
@@ -1300,34 +2390,37 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   }
 
   function renderFormulaEditor(ed, term, r, app) {
-    ed.appendChild(el("h3", "side-section-title", "FORMULA"));
-    const f = el("div", "notice dim");
+    ed.appendChild(el("h3", "side-section-title", "Formula"));
+    const f = el("div", "notice dim formula-view");
     f.textContent = term.formula || "";
     ed.appendChild(f);
     const actions = el("div", "flex-row");
-    const edit = el("button", "btn primary", "✎ Edit formula");
+    const edit = el("button", "btn primary", "\u270e Edit formula");
     edit.addEventListener("click", () => app.openBuilder(term.name));
     actions.appendChild(edit);
-    const rootBtn = el("button", "btn small", term.name === app.state().model.root ? "Root term ✓" : "Make root");
+    const rootBtn = el("button", "btn small", term.name === app.state().model.root ? "Root term \u2713" : "Make root");
     rootBtn.disabled = term.name === app.state().model.root;
     rootBtn.addEventListener("click", () => { const m = app.state().model; m.root = term.name; app.commit(); });
     actions.appendChild(rootBtn);
     ed.appendChild(actions);
-    const p = el("div", "field");
-    const pl = el("label", "", "Period (how this value is counted)");
-    p.appendChild(pl);
-    const selP = el("select", "");
-    U.PERIOD_ORDER.forEach(pp => { const o = el("option", "", pp); if (term.period === pp) o.selected = true; selP.appendChild(o); });
-    selP.addEventListener("change", () => app.updateTerm(term.name, { period: selP.value }));
-    p.appendChild(selP);
-    ed.appendChild(p);
+
+    renderUnitPeriod(ed, term, app);
+
+    // derived-unit check — does the formula's own units agree?
+    const model = app.state().model;
+    const du = CG.units.deriveUnit(term.formula, model);
+    if (du) {
+      const hint = el("div", "derived-unit", "\u21b3 formula yields: " + du);
+      if (term.unit && du !== term.unit) hint.classList.add("mismatch");
+      ed.appendChild(hint);
+    }
   }
 
   function renderGroupEditor(ed, term, r, app) {
-    ed.appendChild(el("h3", "side-section-title", "GROUP — SUM OF"));
+    ed.appendChild(el("h3", "side-section-title", "Group \u2014 sum of"));
     const row = el("div", "flex-row");
     for (const c of term.children || []) {
-      const chip = el("span", "chip term", c + " ×");
+      const chip = el("span", "chip term", c + "  \u00d7");
       chip.title = "Remove from group";
       chip.addEventListener("click", () => {
         const t = app.state().model.termByName(term.name);
@@ -1357,13 +2450,8 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     });
     addRow.appendChild(add);
     ed.appendChild(addRow);
-    const p = el("div", "field");
-    p.appendChild(el("label", "", "Period (children convert into this)"));
-    const selP = el("select", "");
-    U.PERIOD_ORDER.forEach(pp => { const o = el("option", "", pp); if (term.period === pp) o.selected = true; selP.appendChild(o); });
-    selP.addEventListener("change", () => app.updateTerm(term.name, { period: selP.value }));
-    p.appendChild(selP);
-    ed.appendChild(p);
+
+    renderUnitPeriod(ed, term, app);
   }
 
   CG.inspector = { renderInspector, pathToRoot };
@@ -1606,6 +2694,20 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     fChildren.appendChild(childRow);
     body.appendChild(fChildren);
 
+    // unit + period — nothing is auto-assigned; the user opts in.
+    const pickedUnit = { v: "" };
+    const fUnit = el("div", "field");
+    fUnit.appendChild(el("label", "", "Unit (optional — quantity \u2192 symbol)"));
+    fUnit.appendChild(CG.units.renderUnitPicker(app(), { value: "", onPick: (sym) => { pickedUnit.v = sym; } }));
+    body.appendChild(fUnit);
+
+    const pickedPeriod = { v: "" };
+    const fPeriod = el("div", "field");
+    fPeriod.appendChild(el("label", "", "Period (optional — value counted per week / month / year)"));
+    const pSel = CG.units.periodSelect("", (v) => { pickedPeriod.v = v; });
+    fPeriod.appendChild(pSel);
+    body.appendChild(fPeriod);
+
     const sync = () => {
       fVal.style.display = kindSel.value === "value" ? "" : "none";
       fFormula.style.display = kindSel.value === "formula" ? "" : "none";
@@ -1623,7 +2725,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { app.toast("Name must be letters/digits/underscore, no spaces.", "err"); return; }
       if (app.state().model.termByName(name)) { app.toast("A term named '" + name + "' already exists.", "err"); return; }
       const kind = kindSel.value;
-      const term = { id: U.uid(), kind, name, description: "", period: kind === "group" ? "year" : kind === "value" ? "once" : "year", unit: "" };
+      const term = { id: U.uid(), kind, name, description: "", period: pickedPeriod.v || "", unit: pickedUnit.v };
       if (kind === "value") term.value = Number(valInput.value || 0);
       if (kind === "formula") term.formula = formulaInput.value.trim();
       if (kind === "group") term.children = chosen;
@@ -1680,13 +2782,17 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     addG.addEventListener("click", () => openConstantEditor(app, null, "global"));
     globalSec.appendChild(addG);
     container.appendChild(globalSec);
+
+    // global unit library (built-in defaults + user-custom units)
+    CG.units.renderSection(container, app);
   }
 
   function constantRow(c, app, scope) {
     const row = el("div", "tree");
     const li = el("li", "");
-    const name = el("span", "", c.name + " = " + U.fmt(Number(c.value)));
-    if (c.slider) { const s = el("span", "badge", "⚙slider"); li.appendChild(s); }
+    const name = el("span", "", c.name + " = " + U.fmt(Number(c.value)) + (c.unit ? " " + c.unit : ""));
+    if (c.unit) name.style.color = "var(--constant)";
+    if (c.slider) { const s = el("span", "badge", "⚙ slider"); li.appendChild(s); }
     li.appendChild(name);
     li.style.justifyContent = "space-between";
     const btns = el("div", "flex-row");
@@ -1722,10 +2828,11 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     const valI = el("input", ""); valI.type = "number"; valI.step = "any"; valI.value = existing ? existing.value : "";
     fVal.appendChild(valI); body.appendChild(fVal);
 
+    const pickedUnit = { v: existing ? (existing.unit || "") : "" };
     const fUnit = el("div", "field");
-    fUnit.appendChild(el("label", "", "Unit (optional)"));
-    const unitI = el("input", ""); unitI.value = existing ? (existing.unit || "") : "";
-    fUnit.appendChild(unitI); body.appendChild(fUnit);
+    fUnit.appendChild(el("label", "", "Unit (optional — quantity \u2192 symbol; custom units join the global library)"));
+    fUnit.appendChild(CG.units.renderUnitPicker(app, { value: pickedUnit.v, onPick: (sym) => { pickedUnit.v = sym; } }));
+    body.appendChild(fUnit);
 
     const fDesc = el("div", "field");
     fDesc.appendChild(el("label", "", "Description (shown when clicked)"));
@@ -1786,7 +2893,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       if (!Number.isFinite(value)) { app.toast("Value must be a number.", "err"); return; }
       const obj = {
         id: existing ? existing.id : U.uid(),
-        name, value, unit: unitI.value.trim(),
+        name, value, unit: pickedUnit.v,
         description: descI.value.trim(),
         slider: sliderOn.checked ? { min: Number(minI.value), max: Number(maxI.value), step: Number(stepI.value || 1) } : undefined,
         snapshots: snaps.length ? snaps : undefined
@@ -1984,6 +3091,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     eqTab: "combined",
     expanded: new Set(),
     numeric: false,
+    treeCollapsed: new Set(),
     globalConstants: []
   };
   const dom = {};
@@ -2017,8 +3125,12 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
 
     // header
     const hdr = el("header", "hdr");
-    const logo = el("div", "logo", "CalcGraph");
-    logo.appendChild(el("small", "", "Node-Based Calculator"));
+    const logo = el("div", "logo", "");
+    logo.appendChild(el("span", "logo-mark", "ƒ"));
+    const nameWrap = el("div", "", "");
+    nameWrap.appendChild(el("span", "logo-name", "CalcGraph"));
+    nameWrap.appendChild(el("small", "", "Node-Based Calculator"));
+    logo.appendChild(nameWrap);
     hdr.appendChild(logo);
     const sel = el("select", "");
     sel.id = "model-select";
@@ -2050,7 +3162,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     fv.id = "footer-value";
     const fh = el("span", "", "");
     fh.id = "footer-hint";
-    fh.textContent = "Click any block to inspect, edit or dive in · double-click groups to enter them · wheel to zoom";
+    fh.textContent = "right-drag to pan \u00b7 click any block to inspect \u00b7 double-click groups to dive in \u00b7 wheel to zoom";
     ftr.appendChild(fv); ftr.appendChild(el("span", "spacer")); ftr.appendChild(fh);
     root.appendChild(ftr);
 
@@ -2080,6 +3192,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   function expandAll() { if (!state.model) return; state.expanded = new Set(state.model.terms.map(t => t.name)); render(); }
   function collapseAll() { state.expanded = new Set(); render(); }
   function enterGroup(name) { state.scopePath.push(name); state.selected = name; render(); }
+  function toggleTree(name) { if (state.treeCollapsed.has(name)) state.treeCollapsed.delete(name); else state.treeCollapsed.add(name); render(); }
   function leaveGroup() { state.scopePath.pop(); render(); }
   function resetScope() { state.scopePath = []; render(); }
 
@@ -2114,6 +3227,39 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     commit();
   }
 
+  // Rename a term AND every reference to it (formulas, group children, root).
+  // A dry-run clone is validated first so a broken rename never mutates the model.
+  function renameTerm(oldName, newName) {
+    const m = state.model;
+    if (!m || !m.termByName(oldName)) return false;
+    if (oldName === newName) return true;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
+      toast("Term names must be letters, digits or underscore — no spaces.", "err"); return false;
+    }
+    if (m.termByName(newName)) { toast("A term named '" + newName + "' already exists.", "err"); return false; }
+    const applyRename = (data, o, n) => {
+      const map = { [o]: n };
+      for (const t of data.terms) {
+        if (t.kind === "formula" && t.formula) t.formula = CG.parser.renameIdentifiers(t.formula, map);
+        if (t.kind === "group" && Array.isArray(t.children)) t.children = t.children.map(c => c === o ? n : c);
+        if (t.name === o) t.name = n;
+      }
+      if (data.root === o) data.root = n;
+    };
+    const clone = JSON.parse(JSON.stringify(m.toJSON()));
+    applyRename(clone, oldName, newName);
+    try {
+      const test = new CG.model.Model(clone, state.globalConstants);
+      if (test.errors.length) { toast("Can't rename: " + test.errors[0], "err"); return false; }
+    } catch (e) { toast("Can't rename: " + e.message, "err"); return false; }
+    applyRename(m, oldName, newName);
+    m._index();
+    if (state.selected === oldName) state.selected = newName;
+    commit();
+    toast("Renamed '" + oldName + "' \u2192 '" + newName + "'.", "ok");
+    return true;
+  }
+
   function deleteTerm(name) {
     const m = state.model;
     const idx = m.terms.findIndex(t => t.name === name);
@@ -2138,13 +3284,14 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   function newModel() {
     const name = prompt("Name for the new model?", "My model");
     if (!name) return;
+    const rootName = (prompt("Root term name (the single final answer)?", "total") || "total").trim() || "total";
     const data = {
       formatVersion: "0.1",
       id: U.uid(),
       name,
       description: "",
-      root: "total",
-      terms: [{ id: U.uid(), kind: "value", name: "total", value: 0, period: "year", unit: "", description: "Root term of this model." }]
+      root: rootName,
+      terms: [{ id: U.uid(), kind: "value", name: rootName, value: 0, period: "", unit: "", description: "Root term of this model." }]
     };
     try {
       const m = importModel(JSON.stringify(data));
@@ -2173,6 +3320,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     state.selected = null;
     state.scopePath = [];
     state.expanded = new Set();
+    state.treeCollapsed = new Set();
     state.results = CG.evaluate.evaluateModel(state.model);
     const errs = state.model.errors;
     if (errs.length) toast("Model has issues: " + errs[0], "err");
@@ -2272,26 +3420,44 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     sb.appendChild(secModels);
     CG.storage.renderModelsList(savedList, app());
 
-    // outline
+    // outline — hierarchical tree with collapsible groups
     const secTree = el("div", "side-section");
     const tTitle = el("h3", "side-section-title", "MODEL · " + state.model.name);
     secTree.appendChild(tTitle);
     const tree = el("ul", "tree");
-    const groups = state.model.terms.filter(t => t.kind === "group");
-    const others = state.model.terms.filter(t => t.kind !== "group");
-    const order = (t) => t.name === state.model.root ? 0 : t.kind === "group" ? 1 : 2;
-    const all = [...groups, ...others].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
-    for (const t of all) {
-      const li = el("li", (t.kind === "group" ? "grp " : t.kind === "formula" ? "formula " : "value ") + (state.selected === t.name ? "sel" : ""));
-      li.dataset.name = t.name;
-      const nm = el("span", "", t.name);
-      const val = state.results && state.results.results[t.name];
-      const v = el("span", "val", val ? (val.value !== undefined ? U.fmt(val.value) : "⚠") : "");
-      li.appendChild(nm); li.appendChild(v);
-      li.addEventListener("click", () => select(t.name));
-      li.addEventListener("dblclick", () => { if (t.kind === "group") enterGroup(t.name); });
-      tree.appendChild(li);
+    const childrenOf = new Map();
+    const hasParent = new Set();
+    for (const t of state.model.terms) {
+      if (t.kind === "group" && Array.isArray(t.children)) for (const c of t.children) {
+        if (!childrenOf.has(t.name)) childrenOf.set(t.name, []);
+        childrenOf.get(t.name).push(c);
+        hasParent.add(c);
+      }
     }
+    const order = (t) => t.name === state.model.root ? 0 : t.kind === "group" ? 1 : 2;
+    const topLevel = state.model.terms.filter(t => !hasParent.has(t.name)).sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
+    const walk = (name, depth) => {
+      const t = state.model.termByName(name);
+      if (!t) return;
+      const isGroup = t.kind === "group";
+      const kids = childrenOf.get(name) || [];
+      const isCollapsed = state.treeCollapsed.has(name);
+      const li = el("li", (isGroup ? "grp " : t.kind === "formula" ? "formula " : "value ") + (state.selected === name ? "sel" : ""));
+      li.dataset.name = name;
+      li.style.paddingLeft = (6 + depth * 16) + "px";
+      const caret = el("span", "caret", isGroup && kids.length ? (isCollapsed ? "▸" : "▾") : "");
+      if (isGroup && kids.length) caret.addEventListener("click", (ev) => { ev.stopPropagation(); toggleTree(name); });
+      li.appendChild(caret);
+      li.appendChild(el("span", "kind-ic " + t.kind, isGroup ? "▣" : t.kind === "formula" ? "ƒ" : "•"));
+      li.appendChild(el("span", "li-name", t.name));
+      const val = state.results && state.results.results[t.name];
+      li.appendChild(el("span", "val", val ? (val.value !== undefined ? U.fmt(val.value) : "⚠") : ""));
+      li.addEventListener("click", () => select(t.name));
+      li.addEventListener("dblclick", () => { if (isGroup) enterGroup(t.name); });
+      tree.appendChild(li);
+      if (isGroup && kids.length && !isCollapsed) for (const k of kids) walk(k, depth + 1);
+    };
+    for (const t of topLevel) walk(t.name, 0);
     secTree.appendChild(tree);
     const btnRow = el("div", "flex-row");
     const bAddTerm = el("button", "btn small", "+ New term");
@@ -2364,7 +3530,8 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
 
     if (state.view === "graph") {
       const scope = state.scopePath.length ? state.scopePath[state.scopePath.length - 1] : null;
-      const layout = CG.layout.layoutGraph(state.model, state.results, scope);
+      // pass the RESULTS MAP (not the {results,root,contrib} wrapper) so node values render
+      const layout = CG.layout.layoutGraph(state.model, state.results ? state.results.results : {}, scope);
       const handlers = {
         onSelect: (n) => select(n),
         onEnter: (n) => enterGroup(n),
@@ -2375,11 +3542,16 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
       if (state.selected) CG.graph.highlightSelection(viewRoot, state.selected);
       // zoom controls
       const zc = el("div", "graph-zoom");
-      const zi = el("button", "btn small", "+");     zi.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 0.85));
-      const zo = el("button", "btn small", "−"); zo.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 1.18));
-      const zf = el("button", "btn small", "fit");   zf.addEventListener("click", () => viewRoot.__cgReset && viewRoot.__cgReset());
+      const zi = el("button", "btn small", "+");     zi.title = "Zoom in";  zi.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 0.85));
+      const zo = el("button", "btn small", "\u2212"); zo.title = "Zoom out"; zo.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 1.18));
+      const zf = el("button", "btn small", "\u2922"); zf.title = "Fit (centre the graph)"; zf.addEventListener("click", () => viewRoot.__cgReset && viewRoot.__cgReset());
       zc.appendChild(zi); zc.appendChild(zo); zc.appendChild(zf);
       viewRoot.appendChild(zc);
+      const hint = el("div", "graph-hint", "");
+      hint.appendChild(el("span", "", "right-drag \u21c4 pan"));
+      hint.appendChild(el("span", "", "wheel \u21bb zoom"));
+      hint.appendChild(el("span", "", "double-click \u25b8 enter group"));
+      viewRoot.appendChild(hint);
     } else {
       const body = el("div", "eq-scroll");
       body.style.cssText = "height:100%;overflow:auto;";
@@ -2443,8 +3615,8 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   const api = {
     init,
     state: stateView,
-    select, toggleExpand, expandAll, collapseAll, enterGroup, leaveGroup, resetScope,
-    updateTerm, addTerm, deleteTerm,
+    select, toggleExpand, expandAll, collapseAll, enterGroup, leaveGroup, resetScope, toggleTree,
+    updateTerm, addTerm, deleteTerm, renameTerm,
     addConstant, updateConstant, deleteConstant,
     importModel, loadModel, loadDemo, newModel,
     openBuilder: (name) => CG.builder.openBuilder(app(), name),

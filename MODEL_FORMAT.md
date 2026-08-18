@@ -60,6 +60,13 @@ A model is a single JSON file. It can be written by hand, exported from the app,
 
 Every term may carry: `id` (unique), `kind`, `name` (unique identifier: letters/digits/underscore only), `description` (plain language — shown when the user clicks the block), `formula`, `period`, `unit`, `slider`, `snapshots`.
 
+## Units & quantities (v0.2 UI, compatible with v0.1 data)
+
+- `unit` is a display **symbol** chosen from a quantity→unit picker (Time, Length, Breadth, Area, Volume, Mass, Force, Pressure, Energy, Power, Temperature, Angle, Currency, Ratio, Count…). Example: `"unit": "MPa"`.
+- The picker ships with built-in defaults; **custom units the user adds are saved to a global unit library** in the browser (`calcgraph.units.v1`) and are available in every model — they are NOT part of the model JSON.
+- **Nothing is auto-assigned**: new terms default to `"period": ""` and `"unit": ""`; the user opts in. AI-generated models may still set them explicitly (demos do).
+- Formula terms show a **derived-unit hint** in the app (e.g. `N·mm / mm³`) computed from referenced terms' units, to double-check that the units match the formula.
+
 ## Periods / time buckets
 
 `once`, `week`, `month`, `year`. When a child feeds a parent, its value converts to the **parent's period**:
