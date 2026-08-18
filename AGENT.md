@@ -54,6 +54,14 @@ serving root `index.html`; shareable `calcgraph.html` is also committed).
    finished item done and add any newly discovered follow-ups. Never batch the update at
    the end and never leave finished work unlisted. A session is only "done" when the list
    is fully checked off or every remaining item is deliberately parked.
+8. **Ask first — as many questions as needed.** This project was shaped by an 11-question
+   discovery round ([inputs/discovery-qa.md](inputs/discovery-qa.md)); keep that habit in
+   EVERY session. Before starting work on any request: if the ask is ambiguous, incomplete,
+   or open to interpretation, ask the user clarifying questions — as many as needed — until
+   you genuinely understand what they want. Never guess a major requirement, never assume
+   a scope, never trade "quick progress" for a wrong build, and never treat silence as
+   approval. Record every question and the user's answers **verbatim** in `inputs/` so later
+   sessions inherit the context.
 
 ---
 
@@ -225,6 +233,9 @@ No `npm install` needed for anything.
   Create and asserts the term was added (ui-smoke now 37 checks). (4) Rewrote README.md:
   "What the tool provides", "How to operate" step-by-step, "What to look out for".
   (5) Added this file's rule 7: keep the session to-do list updated after every task.
+  (6, follow-up) Added rule 8: agents must ask the user as many clarifying questions as
+  needed before acting on any ambiguous request (the discovery-round habit), and the
+  next-session checklist now makes asking questions step 2.
   Rebuilt all outputs; all four checks green; committed and pushed.
 
 - **Session 4 (features + redesign):** (1) **editable variable names** — inspector name field +
@@ -246,11 +257,15 @@ No `npm install` needed for anything.
    [inputs/user-brief.md](inputs/user-brief.md) and
    [inputs/discovery-qa.md](inputs/discovery-qa.md) — do NOT open built HTML files.
    Update the to-do list after **every** task (working rule 7).
-2. If the user reports a UI problem: run `node tools/ui-smoke.mjs` first (it boots the
+2. **Before any new work, ask the user as many clarifying questions as needed** until the
+   request is unambiguous (working rule 8) — never build on assumptions. Record the Q&A
+   verbatim in `inputs/` when it changes the project.
+3. If the user reports a UI problem: run `node tools/ui-smoke.mjs` first (it boots the
    real bundle), then investigate `src/`.
-3. If the user wants a new feature: add it to `src/`, rebuild, run all four checks,
-   then commit with a detailed message and push; update this file + the journey.
-4. Before claiming done: run all checks, confirm `git status` is clean, and confirm
+4. If the user wants a new feature: ask any clarifying questions first (rule 8), add it
+   to `src/`, rebuild, run all four checks, then commit with a detailed message and push;
+   update this file + the journey.
+5. Before claiming done: run all checks, confirm `git status` is clean, and confirm
    the live Pages URL returns 200 after the push.
 
 ## 12. Reading order
@@ -266,5 +281,5 @@ No `npm install` needed for anything.
 
 ---
 *Last updated: session 5 — button-layout audit + CSS fixes, "+ New term" bug fix + regression
-checks, README operation guide, and working rule 7 (keep the session to-do list updated after
-every task).*
+checks, README operation guide, working rule 7 (keep the session to-do list updated after every
+task), and working rule 8 (always ask the user as many clarifying questions as needed).*

@@ -180,6 +180,11 @@ verified app. Numbered phases, each with what was done and why it mattered.
     test counts, and next-session checklist updated accordingly.
 58. Rebuilt all three outputs; engine 26/26, ui-smoke 37/37, bundle + audit clean; committed
     and pushed.
+59. **Follow-up (same session):** the user asked that AGENT.md always instruct session agents
+    to ask the user **as many clarifying questions as needed** to understand any request before
+    acting. Added working rule 8 ("Ask first") referencing the 11-question discovery round as
+    the house style, made asking questions step 2 of the next-session checklist, and recorded
+    the Q&A-verbatim convention in `inputs/`. Committed and pushed.
 
 ---
 *Append new phases here in later sessions so the history stays complete.*
