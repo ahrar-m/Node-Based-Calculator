@@ -121,5 +121,32 @@ verified app. Numbered phases, each with what was done and why it mattered.
 43. Added the same never-read-built-HTML note to the SPEC reading order.
 44. Committed and pushed the documentation update.
 
+## Phase 12 — Units, rename, pan, and the visual redesign (user request)
+
+45. **Editable variable names.** Inspector name becomes an input; `app.renameTerm` validates a
+    dry-run clone first, then does a token-accurate `renameIdentifiers` pass over every formula,
+    group-child list, and the root — so renaming `rent → office_rent` updates the whole model.
+46. **User-configured unit system.** New `src/js/06-units.js` module (manifest entry added):
+    built-in quantity defaults (Time, Length, Breadth, Area, Volume, Mass, Force, Pressure,
+    Energy, Power, Temperature, Angle, Currency, Ratio, Count…), a quantity→symbol picker on
+    every term and constant, custom units saved to a **global library** (`calcgraph.units.v1`),
+    and a derived-unit hint that walks the formula AST (`N·mm / mm³`) so the units visibly
+    "match the formula".
+47. **No auto-assigned units/periods.** New models and new terms start with unit `""` and period
+    `""` ("— no period —"); nothing is silently set to year/week/month.
+48. **Right-click pan + centred fit.** Graph now pans by right/middle-drag (context menu
+    suppressed), zooms by wheel, and the fit/zoom controls centre the content bounding box —
+    the old fit left-aligned everything.
+49. **Deep visual overhaul (max effort on visualisation).** All five `src/styles/` modules
+    rewritten: glass header/footer/modals, gradient brand + accents, glowing gradient bezier
+    edges with period-factor chips, rich nodes (kind accent bars, ports, unit/period meta),
+    dot-grid graph canvas, hierarchical collapsible outline tree, styled range sliders/toasts/
+    chips, equation cards with unit chips. Verified boot in real headless Chrome (no console
+    errors) and inspected the serialized DOM for correct SVG/equation output.
+50. **Latent bug fixed:** graph node values rendered "?" because `layoutGraph` received the
+    evaluator wrapper; now passes the results map.
+51. Checks: engine smoke 26/26, ui-smoke 31/31 (new rename + units cases), bundle + audit
+    clean. Rebuilt all three outputs, committed and pushed.
+
 ---
 *Append new phases here in later sessions so the history stays complete.*

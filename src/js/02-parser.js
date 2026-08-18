@@ -237,5 +237,34 @@
     return "?";
   }
 
-  CG.parser = { parse, evaluate, simplify, toSource, identifiers, tokenize, FUNCS, CMP };
+  // Token-aware rename: renames every occurrence of the given identifiers
+  // inside a formula string, without touching other tokens. Unknown side
+  // characters (rare) fall back to a word-boundary regex.
+  function renameIdentifiers(src, renameMap) {
+    if (!src || !renameMap) return src;
+    const keys = Object.keys(renameMap);
+    if (!keys.length) return src;
+    let out;
+    try {
+      const toks = tokenize(src);
+      const edits = [];
+      for (const t of toks) {
+        if (t.t === "ident" && renameMap.hasOwnProperty(t.v)) edits.push([t.p, t.v.length, renameMap[t.v]]);
+      }
+      out = src;
+      for (let i = edits.length - 1; i >= 0; i--) {
+        const [p, len, rep] = edits[i];
+        out = out.slice(0, p) + rep + out.slice(p + len);
+      }
+      return out;
+    } catch {
+      out = src;
+      for (const k of keys) {
+        out = out.replace(new RegExp("\\b" + k + "\\b", "g"), renameMap[k]);
+      }
+      return out;
+    }
+  }
+
+  CG.parser = { parse, evaluate, simplify, toSource, identifiers, tokenize, renameIdentifiers, FUNCS, CMP };
 })();

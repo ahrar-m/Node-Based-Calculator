@@ -14,6 +14,7 @@
     "src/js/04-equation.js",
     "src/js/05-layout.js",
     "src/js/06-graph.js",
+    "src/js/06-units.js",
     "src/js/07-inspector.js",
     "src/js/08-builder.js",
     "src/js/09-libraries.js",

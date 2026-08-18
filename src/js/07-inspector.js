@@ -18,40 +18,51 @@
     const { model, results, selected } = app.state();
     clear(container);
     if (!selected || !model.termByName(selected)) {
-      container.appendChild(el("div", "empty-hint", "Click any term in the graph, equation, or outline to inspect it here.\n\nYou can edit its value, formula, description, period, slider and snapshots."));
+      container.appendChild(el("div", "empty-hint", "Click any term in the graph, equation, or outline to inspect it here.\n\nYou can rename it, edit its value or formula, add a unit (quantity + symbol), period, slider and snapshots."));
       return;
     }
     const term = model.termByName(selected);
     const rr = results && results.results ? results.results : {};
     const r = rr[selected] || {};
 
-    container.appendChild(el("h3", "side-section-title", "TERM"));
-
-    // name + kind + delete
-    const head = el("div", "side-section");
+    // ---- header card ----
+    const head = el("div", "insp-head");
     const nameRow = el("div", "flex-row");
-    nameRow.appendChild(el("strong", "", term.name));
-    if (term.name === model.root) nameRow.appendChild(el("span", "eq-badge", "root"));
+    const nameInput = el("input", "insp-name");
+    nameInput.type = "text";
+    nameInput.value = term.name;
+    nameInput.title = "Rename this term — every reference in the model is updated automatically";
+    nameInput.addEventListener("change", () => {
+      const v = nameInput.value.trim();
+      if (v === term.name) { nameInput.value = term.name; return; }
+      app.renameTerm(term.name, v);
+      const cur = app.state().model.termByName(term.name);
+      nameInput.value = cur ? cur.name : v;
+    });
+    nameInput.addEventListener("keydown", (ev) => { if (ev.key === "Enter") nameInput.blur(); });
+    nameRow.appendChild(nameInput);
+    if (term.name === model.root) nameRow.appendChild(el("span", "badge k-group", "\u2605 root"));
     head.appendChild(nameRow);
+
     const kindRow = el("div", "flex-row");
-    kindRow.appendChild(el("span", "badge", term.kind));
+    kindRow.appendChild(el("span", "badge k-" + term.kind, term.kind === "formula" ? "\u0192 formula" : term.kind));
     if (term.period) kindRow.appendChild(el("span", "badge", term.period));
-    if (term.unit) kindRow.appendChild(el("span", "badge", term.unit));
+    if (term.unit) kindRow.appendChild(el("span", "badge k-constant", term.unit));
     head.appendChild(kindRow);
-    const valPill = el("div", "kv");
-    const dd = el("dd", "");
+
+    const valPill = el("div", "kv value-pill");
+    const dd = el("dd", "big");
     const valText = r.value !== undefined ? U.fmt(r.value) : (r.error || "?");
-    dd.style.cssText = "font-size:20px;font-weight:700;color:" + (r.value !== undefined ? "var(--ok)" : "var(--err)") + ";";
-    dd.textContent = valText;
+    dd.textContent = valText + (term.unit ? " " + term.unit : "") + (term.period ? "  \u00b7 " + term.period : "");
     valPill.appendChild(el("dt", "", "Current value"));
     valPill.appendChild(dd);
     if (r.error) { const er = el("div", "notice err", r.error); head.appendChild(er); }
     head.appendChild(valPill);
     container.appendChild(head);
 
-    // description (editable)
+    // ---- description ----
     const descSec = el("div", "side-section");
-    descSec.appendChild(el("h3", "side-section-title", "WHAT THIS TERM DOES"));
+    descSec.appendChild(el("h3", "side-section-title", "What this term does"));
     const desc = el("textarea", "field", "");
     desc.rows = 3;
     desc.value = term.description || "";
@@ -60,23 +71,23 @@
     descSec.appendChild(desc);
     container.appendChild(descSec);
 
-    // per-kind editor
+    // ---- per-kind editor ----
     const ed = el("div", "side-section");
     if (term.kind === "value") renderValueEditor(ed, term, r, app);
     else if (term.kind === "formula") renderFormulaEditor(ed, term, r, app);
     else renderGroupEditor(ed, term, r, app);
     container.appendChild(ed);
 
-    // used by
+    // ---- used by ----
     const parents = model.parentsOf(term.name);
     if (parents.length) {
       const sec = el("div", "side-section");
-      sec.appendChild(el("h3", "side-section-title", "USED BY / FEEDS INTO"));
+      sec.appendChild(el("h3", "side-section-title", "Used by / feeds into"));
       const chain = pathToRoot(model, term.name);
       const pathRow = el("div", "flex-row");
       chain.forEach((n, i) => {
         pathRow.appendChild(el("span", "crumb" + (i === chain.length - 1 ? " current" : ""), n));
-        if (i < chain.length - 1) pathRow.appendChild(el("span", "crumb-sep", "→"));
+        if (i < chain.length - 1) pathRow.appendChild(el("span", "crumb-sep", "\u2192"));
       });
       sec.appendChild(pathRow);
       const chipRow = el("div", "flex-row");
@@ -89,15 +100,15 @@
       container.appendChild(sec);
     }
 
-    // contributions from children (only for formula/group)
+    // ---- contributions ----
     const contribs = results.contrib ? results.contrib.filter(c => c.parent === term.name) : [];
     if (contribs.length) {
       const sec = el("div", "side-section");
-      sec.appendChild(el("h3", "side-section-title", "WHAT FEEDS THIS TERM"));
+      sec.appendChild(el("h3", "side-section-title", "What feeds this term"));
       for (const c of contribs) {
         const row = el("div", "kv");
         const d = el("dd", "");
-        d.textContent = U.fmt(c.value) + (c.factor !== 1 ? "  (×" + U.fmt(c.factor) + ")" : "");
+        d.textContent = U.fmt(c.value) + (c.factor !== 1 ? "  (\u00d7" + U.fmt(c.factor) + ")" : "");
         row.appendChild(el("dt", "", c.child));
         row.appendChild(d);
         sec.appendChild(row);
@@ -105,9 +116,9 @@
       container.appendChild(sec);
     }
 
-    // danger zone
+    // ---- danger zone ----
     const dz = el("div", "side-section");
-    const del = el("button", "btn danger small", "Delete term");
+    const del = el("button", "btn danger small", "\u232b Delete term");
     del.addEventListener("click", () => {
       if (confirm("Delete term '" + term.name + "'? Referencing terms will break if they use it.")) app.deleteTerm(term.name);
     });
@@ -127,36 +138,47 @@
     return path;
   }
 
+  // ---- unit + period block shared by every editor ----
+  function renderUnitPeriod(ed, term, app) {
+    const box = el("div", "");
+    const uLabel = el("div", "field-label-row");
+    uLabel.appendChild(el("span", "", "Unit (quantity \u2192 symbol)"));
+    box.appendChild(uLabel);
+
+    const picker = CG.units.renderUnitPicker(app, {
+      value: term.unit || "",
+      onPick: (sym) => app.updateTerm(term.name, { unit: sym }, true)
+    });
+    box.appendChild(picker);
+
+    const pLabel = el("div", "field-label-row");
+    pLabel.appendChild(el("span", "", "Period (time-bucket conversion)"));
+    box.appendChild(pLabel);
+    const pSel = CG.units.periodSelect(term.period || "", (v) => app.updateTerm(term.name, { period: v || "" }, true));
+    box.appendChild(pSel);
+    ed.appendChild(box);
+  }
+
   function renderValueEditor(ed, term, r, app) {
-    ed.appendChild(el("h3", "side-section-title", "VALUE"));
+    ed.appendChild(el("h3", "side-section-title", "Value"));
     const num = el("input", "");
     num.type = "number"; num.step = "any"; num.value = term.value;
-    num.style.width = "100%";
+    num.style.width = "100%"; num.style.fontWeight = "700";
     num.addEventListener("input", () => app.updateTerm(term.name, { value: Number(num.value) }, true));
     ed.appendChild(num);
 
-    const row = el("div", "flex-row");
-    const selP = el("select", "");
-    U.PERIOD_ORDER.forEach(p => { const o = el("option", "", p); if (term.period === p) o.selected = true; selP.appendChild(o); });
-    selP.addEventListener("change", () => app.updateTerm(term.name, { period: selP.value }));
-    row.appendChild(selP);
-    const unit = el("input", "");
-    unit.placeholder = "unit (USD, m, MPa...)"; unit.value = term.unit || "";
-    unit.addEventListener("input", () => app.updateTerm(term.name, { unit: unit.value }, true));
-    row.appendChild(unit);
-    ed.appendChild(row);
-
-    renderSlider(ed, term, app, app.updateTerm);
+    renderUnitPeriod(ed, term, app);
+    renderSlider(ed, term, app);
     renderSnapshots(ed, term, app);
   }
 
   function renderSlider(box, term, app) {
     const s = term.slider;
     const sec = el("div", "");
-    sec.style.marginTop = "8px";
+    sec.style.marginTop = "10px";
     if (s) {
       const title = el("div", "flex-row");
-      title.appendChild(el("span", "", "Slider: " + U.fmt(Number(term.value))));
+      title.appendChild(el("span", "", "Slider"));
       const off = el("button", "btn small", "Remove slider");
       off.addEventListener("click", () => { const t = app.state().model.termByName(term.name); delete t.slider; app.commit(); });
       title.appendChild(off);
@@ -173,7 +195,7 @@
       sec.appendChild(srow);
       box.appendChild(sec);
     } else {
-      const add = el("button", "btn small", "⚙ Add slider (min/max/step)");
+      const add = el("button", "btn small", "\u2699 Add slider (min / max / step)");
       add.addEventListener("click", () => {
         const t = app.state().model.termByName(term.name);
         const v = Number(t.value) || 0;
@@ -188,11 +210,11 @@
     const snaps = Array.isArray(term.snapshots) ? term.snapshots : [];
     if (snaps.length) {
       const sec = el("div", "");
-      sec.style.marginTop = "8px";
+      sec.style.marginTop = "10px";
       sec.appendChild(el("div", "", "Snapshots (click to apply)"));
       const row = el("div", "flex-row");
       for (const s of snaps) {
-        const c = el("span", "chip", s.label + " = " + U.fmt(Number(s.value)));
+        const c = el("span", "chip", s.label + "  =  " + U.fmt(Number(s.value)));
         if (Number(s.value) === Number(term.value)) c.classList.add("selected");
         c.addEventListener("click", () => app.updateTerm(term.name, { value: Number(s.value) }, true));
         row.appendChild(c);
@@ -203,34 +225,37 @@
   }
 
   function renderFormulaEditor(ed, term, r, app) {
-    ed.appendChild(el("h3", "side-section-title", "FORMULA"));
-    const f = el("div", "notice dim");
+    ed.appendChild(el("h3", "side-section-title", "Formula"));
+    const f = el("div", "notice dim formula-view");
     f.textContent = term.formula || "";
     ed.appendChild(f);
     const actions = el("div", "flex-row");
-    const edit = el("button", "btn primary", "✎ Edit formula");
+    const edit = el("button", "btn primary", "\u270e Edit formula");
     edit.addEventListener("click", () => app.openBuilder(term.name));
     actions.appendChild(edit);
-    const rootBtn = el("button", "btn small", term.name === app.state().model.root ? "Root term ✓" : "Make root");
+    const rootBtn = el("button", "btn small", term.name === app.state().model.root ? "Root term \u2713" : "Make root");
     rootBtn.disabled = term.name === app.state().model.root;
     rootBtn.addEventListener("click", () => { const m = app.state().model; m.root = term.name; app.commit(); });
     actions.appendChild(rootBtn);
     ed.appendChild(actions);
-    const p = el("div", "field");
-    const pl = el("label", "", "Period (how this value is counted)");
-    p.appendChild(pl);
-    const selP = el("select", "");
-    U.PERIOD_ORDER.forEach(pp => { const o = el("option", "", pp); if (term.period === pp) o.selected = true; selP.appendChild(o); });
-    selP.addEventListener("change", () => app.updateTerm(term.name, { period: selP.value }));
-    p.appendChild(selP);
-    ed.appendChild(p);
+
+    renderUnitPeriod(ed, term, app);
+
+    // derived-unit check — does the formula's own units agree?
+    const model = app.state().model;
+    const du = CG.units.deriveUnit(term.formula, model);
+    if (du) {
+      const hint = el("div", "derived-unit", "\u21b3 formula yields: " + du);
+      if (term.unit && du !== term.unit) hint.classList.add("mismatch");
+      ed.appendChild(hint);
+    }
   }
 
   function renderGroupEditor(ed, term, r, app) {
-    ed.appendChild(el("h3", "side-section-title", "GROUP — SUM OF"));
+    ed.appendChild(el("h3", "side-section-title", "Group \u2014 sum of"));
     const row = el("div", "flex-row");
     for (const c of term.children || []) {
-      const chip = el("span", "chip term", c + " ×");
+      const chip = el("span", "chip term", c + "  \u00d7");
       chip.title = "Remove from group";
       chip.addEventListener("click", () => {
         const t = app.state().model.termByName(term.name);
@@ -260,13 +285,8 @@
     });
     addRow.appendChild(add);
     ed.appendChild(addRow);
-    const p = el("div", "field");
-    p.appendChild(el("label", "", "Period (children convert into this)"));
-    const selP = el("select", "");
-    U.PERIOD_ORDER.forEach(pp => { const o = el("option", "", pp); if (term.period === pp) o.selected = true; selP.appendChild(o); });
-    selP.addEventListener("change", () => app.updateTerm(term.name, { period: selP.value }));
-    p.appendChild(selP);
-    ed.appendChild(p);
+
+    renderUnitPeriod(ed, term, app);
   }
 
   CG.inspector = { renderInspector, pathToRoot };

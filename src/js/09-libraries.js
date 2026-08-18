@@ -27,13 +27,17 @@
     addG.addEventListener("click", () => openConstantEditor(app, null, "global"));
     globalSec.appendChild(addG);
     container.appendChild(globalSec);
+
+    // global unit library (built-in defaults + user-custom units)
+    CG.units.renderSection(container, app);
   }
 
   function constantRow(c, app, scope) {
     const row = el("div", "tree");
     const li = el("li", "");
-    const name = el("span", "", c.name + " = " + U.fmt(Number(c.value)));
-    if (c.slider) { const s = el("span", "badge", "⚙slider"); li.appendChild(s); }
+    const name = el("span", "", c.name + " = " + U.fmt(Number(c.value)) + (c.unit ? " " + c.unit : ""));
+    if (c.unit) name.style.color = "var(--constant)";
+    if (c.slider) { const s = el("span", "badge", "⚙ slider"); li.appendChild(s); }
     li.appendChild(name);
     li.style.justifyContent = "space-between";
     const btns = el("div", "flex-row");
@@ -69,10 +73,11 @@
     const valI = el("input", ""); valI.type = "number"; valI.step = "any"; valI.value = existing ? existing.value : "";
     fVal.appendChild(valI); body.appendChild(fVal);
 
+    const pickedUnit = { v: existing ? (existing.unit || "") : "" };
     const fUnit = el("div", "field");
-    fUnit.appendChild(el("label", "", "Unit (optional)"));
-    const unitI = el("input", ""); unitI.value = existing ? (existing.unit || "") : "";
-    fUnit.appendChild(unitI); body.appendChild(fUnit);
+    fUnit.appendChild(el("label", "", "Unit (optional — quantity \u2192 symbol; custom units join the global library)"));
+    fUnit.appendChild(CG.units.renderUnitPicker(app, { value: pickedUnit.v, onPick: (sym) => { pickedUnit.v = sym; } }));
+    body.appendChild(fUnit);
 
     const fDesc = el("div", "field");
     fDesc.appendChild(el("label", "", "Description (shown when clicked)"));
@@ -133,7 +138,7 @@
       if (!Number.isFinite(value)) { app.toast("Value must be a number.", "err"); return; }
       const obj = {
         id: existing ? existing.id : U.uid(),
-        name, value, unit: unitI.value.trim(),
+        name, value, unit: pickedUnit.v,
         description: descI.value.trim(),
         slider: sliderOn.checked ? { min: Number(minI.value), max: Number(maxI.value), step: Number(stepI.value || 1) } : undefined,
         snapshots: snaps.length ? snaps : undefined

@@ -93,7 +93,7 @@ src/
   index.html            <- HTML shell (template with /*__CSS__*/ and /*__JS__*/ tokens)
   manifest.json         <- the module list + output paths used by build.mjs
   styles/               <- 5 CSS modules (base, layout, components, graph, equation)
-  js/                   <- 13 small JS modules (see §7)
+  js/                   <- 14 small JS modules (see §7)
 build.mjs               <- the joiner: src/ -> standalone HTML files
 tools/
   dom-stub.mjs          <- shared minimal DOM/browser stubs for headless tests
@@ -161,8 +161,14 @@ No `npm install` needed for anything.
   internally consistent.
 - **PowerShell 5.1:** no `&&`; use `;` or separate calls. For multi-line output,
   prefer `node -e`/files over PS pipelines where possible.
-- **localStorage keys:** `calcgraph.models.v2`, `calcgraph.global.cons.v1` — changing
-  the shape? bump the version suffix.
+- **localStorage keys:** `calcgraph.models.v2`, `calcgraph.global.cons.v1`,
+  `calcgraph.units.v1` (global unit library — built-ins merge with user customs on
+  load; only save customs, never built-ins) — changing any shape? bump the version suffix.
+- **Graph node values showed "?"** → `layoutGraph` must receive the **results map**
+  (`state.results.results`), never the `{results, root, contrib}` wrapper (fixed in session 4).
+- **`renameIdentifiers` is token-based**: never regex-replace term names in formulas blindly;
+  use `CG.parser.renameIdentifiers(src, {old:new})` (falls back to word-boundary regex only
+  when a formula won't tokenize).
 
 ## 9. Built & verified (status)
 
@@ -170,16 +176,21 @@ No `npm install` needed for anything.
 - [x] Parser/evaluator/simplifier — tested
 - [x] Evaluator with period conversion + contributions — tested
 - [x] Combined-equation generator (expand/collapse, numeric mode, factors) — tested
-- [x] Auto-layout graph (layered DAG) + SVG render (zoom, drill-down, breadcrumbs)
-- [x] Inspector (values, description, period, unit, sliders, snapshots, used-by)
-- [x] Interactive formula builder (chips, live parse + preview, attachment chain)
+- [x] Auto-layout graph (layered DAG) + SVG render — **centred fit**, right/middle-drag pan,
+      wheel zoom, gradient bezier edges with period-factor chips (×12/×52), rich nodes
+      (kind accent, ports, unit/period meta line), edge/node highlight on selection
+- [x] Inspector (editable **term name with full reference propagation**, value/description,
+      **unit picker: quantity → symbol**, period select with "no period" default, sliders, snapshots)
+- [x] Unit system: **global unit library** (built-in quantities Time/Length/Breadth/Area/Volume/
+      Mass/Force/Pressure/Energy/Power/Temperature/Angle/Currency/Ratio/Count + user customs saved
+      in `calcgraph.units.v1`), derived-unit hint for formulas (e.g. `N·mm / mm³`)
 - [x] Libraries (project + global CRUD, slider/snapshot editor)
-- [x] Storage (localStorage autosave, model list, JSON export)
+- [x] Storage (localStorage autosave, model list, JSON export, unit library)
 - [x] Import modal (paste AI JSON / file) + validation errors
 - [x] Demos injected at build (expenses → 160,056/yr; beam design → SAFE)
 - [x] Build pipeline (3 outputs), preview server, engine/UI/bundle/audit checks
 - [ ] Deferred / next: undo-redo, printable/interactive report export, in-app AI chat,
-      charts for time buckets, drag-rearrange of graph, unit conversion, statistics fns,
+      charts for time buckets, drag-rearrange of graph, numeric unit conversion, statistics fns,
       mobile layout pass.
 
 ## 10. Session log
@@ -193,6 +204,18 @@ No `npm install` needed for anything.
   Also `tools/audit.mjs` (`3da06e3`) and steady-state rebuilds.
 - **Session 3 (docs):** added the agent working rules (this file) — never read built HTML,
   canonical change flow, pitfalls, session log. (This session.)
+- **Session 4 (features + redesign):** (1) **editable variable names** — inspector name field +
+  `app.renameTerm` with token-based `renameIdentifiers` (formulas, group children, root all
+  propagate; dry-run validation first). (2) **user-configured unit system** — new `src/js/06-units.js`:
+  built-in quantity defaults (time/length/breadth/etc.), quantity→symbol pickers on every term and
+  constant, **custom units saved to a global library** (`calcgraph.units.v1`), derived-unit hint
+  for formulas; **no auto-assigned periods/units** ("no period" is the default; new models/terms start blank).
+  (3) **right-drag pan** + centred **fit** (content bounding box; was left-aligned) + richer graph rendering
+  (bezier gradient edges, ports, period-factor chips, kind accents). (4) **deep visual overhaul** of all 5 CSS
+  modules: glass header/footer/modals, gradient accents, glow/shadows, dot-grid graph canvas, hierarchical
+  collapsible outline tree, styled sliders/chips/toasts, equation cards. Fixed a latent bug: graph node values
+  showed "?" (layout got the evaluator wrapper instead of the results map). Checks: smoke 26/26, ui-smoke 31/31,
+  bundle + audit clean; verified boot in real headless Chrome with zero console errors. Commit pushed to main.
 
 ## 11. Suggested actions for the NEXT session
 

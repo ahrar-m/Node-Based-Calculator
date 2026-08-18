@@ -1,19 +1,107 @@
-/* 04-graph.css — the auto-layout node graph */
-#view-root svg { display: block; width: 100%; height: 100%; }
-.edge { stroke: #4b5a6e; stroke-width: 1.5; fill: none; }
-.edge:hover { stroke: var(--accent); }
-.edge-hl { stroke: var(--accent); stroke-width: 2.5; }
-.arrow { fill: #4b5a6e; }
-.arrow-hl { fill: var(--accent); }
-.gnode { cursor: pointer; }
-.gnode rect { fill: var(--bg-3); stroke: var(--border-2); stroke-width: 1.2; rx: 8; }
-.gnode:hover rect { stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(79,156,249,.35)); }
-.gnode.sel rect { stroke: var(--accent); stroke-width: 2.2; }
-.gnode.group rect { stroke: #f59e0b; stroke-dasharray: 5 3; }
-.gnode.group.sel rect { stroke: #fbbf24; stroke-width: 2.6; }
-.gnode text { fill: var(--text); font-size: 12px; }
-.gnode .v label { fill: var(--ok); font-family: var(--mono); font-size: 11.5px; }
-.gnode .name { font-weight: 600; }
-.gnode .badge { fill: #f59e0b; font-size: 10px; }
-.graph-zoom { position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
-.breadcrumb-strip { display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: var(--bg-2); border-bottom: 1px solid var(--border); font-size: 13px; overflow-x: auto; white-space: nowrap; }
+/* 04-graph.css — auto-layout node graph: glowing bezier edges, rich nodes, pan/zoom */
+#view-root {
+  background:
+    radial-gradient(rgba(160,180,220,.055) 1px, transparent 1.5px),
+    rgba(5,8,14,.42);
+  background-size: 24px 24px, auto;
+}
+#view-root svg { display: block; width: 100%; height: 100%; cursor: grab; }
+#view-root svg.panning { cursor: grabbing; }
+
+/* ---------- Edges ---------- */
+.edge {
+  stroke: url(#cg-edgeGrad);
+  stroke-width: 1.9;
+  fill: none;
+  opacity: .72;
+  transition: opacity .15s, stroke-width .15s;
+}
+.edge:hover { opacity: 1; }
+.edge-hl { opacity: 1; stroke-width: 2.8; filter: drop-shadow(0 0 5px rgba(110,139,255,.6)); }
+.edge.group-edge {
+  stroke: url(#cg-edgeGradG);
+  stroke-dasharray: 7 5;
+  stroke-width: 2.1;
+  opacity: .8;
+  animation: dashFlow 14s linear infinite;
+}
+@keyframes dashFlow { to { stroke-dashoffset: -240; } }
+.edge-label {
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 700;
+  fill: var(--constant);
+  background: transparent;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.7));
+}
+.edge-label.group { fill: var(--group); }
+
+/* ---------- Nodes ---------- */
+.gnode {
+  cursor: pointer;
+  transition: transform .15s var(--ease);
+}
+.gnode:hover { transform: translateY(-2px); }
+.gnode rect {
+  stroke: rgba(150,168,196,.3);
+  stroke-width: 1.2;
+  transition: stroke .16s, filter .16s;
+}
+.gnode:hover rect { stroke: var(--accent); filter: drop-shadow(0 0 10px rgba(110,139,255,.4)); }
+.gnode.sel rect {
+  stroke: var(--accent); stroke-width: 2.2;
+  filter: drop-shadow(0 0 16px rgba(110,139,255,.55));
+}
+.gnode.group rect { stroke: rgba(255,200,87,.55); stroke-dasharray: 7 5; }
+.gnode.group:hover rect { stroke: var(--group); filter: drop-shadow(0 0 12px rgba(255,200,87,.35)); }
+.gnode.group.sel rect {
+  stroke: var(--group); stroke-width: 2.2;
+  filter: drop-shadow(0 0 16px rgba(255,200,87,.5));
+}
+.gnode .kicker { fill: var(--accent); opacity: .95; }
+.gnode .kicker.value { fill: var(--value); }
+.gnode .kicker.formula { fill: var(--formula); }
+.gnode .kicker.group { fill: var(--group); }
+
+.gnode .name {
+  font-size: 13px; font-weight: 700;
+  fill: #eef3ff;
+  letter-spacing: .2px;
+}
+.gnode .v { font-family: var(--mono); font-weight: 700; font-size: 12px; }
+.gnode .v .ok { fill: var(--value); }
+.gnode .v .err { fill: var(--err); }
+.gnode .meta { font-family: var(--mono); font-size: 9.5px; letter-spacing: .3px; }
+.gnode .meta .u { fill: var(--constant); }
+.gnode .meta .p { fill: var(--text-dim); }
+
+.gnode .port { fill: #0a0f1c; stroke-width: 1.7; }
+.gnode .port.in { stroke: var(--accent); }
+.gnode .port.out { stroke: rgba(56,225,255,.85); }
+.gnode .badge { fill: var(--group); font-size: 11px; font-weight: 800; }
+
+/* ---------- Controls ---------- */
+.graph-zoom {
+  position: absolute; right: 14px; bottom: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  z-index: 5;
+}
+.graph-zoom .btn {
+  width: 36px; height: 36px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 11px; font-size: 17px;
+  background: rgba(12,17,28,.78);
+  border: 1px solid var(--line-2);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-1);
+}
+.graph-zoom .btn:hover { background: rgba(110,139,255,.16); }
+.graph-hint {
+  position: absolute; left: 14px; bottom: 14px;
+  font-size: 11.5px; color: var(--text-dim);
+  display: flex; gap: 14px; align-items: center;
+  background: rgba(12,17,28,.62);
+  border: 1px solid var(--line);
+  border-radius: 11px; padding: 6px 13px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  z-index: 5;
+}

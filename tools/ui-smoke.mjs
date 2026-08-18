@@ -146,6 +146,42 @@ try {
   try { CG.app.addConstant({ id: "c-x", name: "test_const", value: 5, unit: "", description: "", slider: undefined, snapshots: undefined }, "project"); check("add project constant ok", true); }
   catch (e) { check("add project constant ok", false, e.message); }
 
+  // ---- rename propagates everywhere ----
+  const okR1 = CG.app.renameTerm("rent", "office_rent");
+  check("rename: accepted", okR1 === true, "got=" + okR1);
+  check("rename: term renamed", !!CG.app.state().model.termByName("office_rent") && !CG.app.state().model.termByName("rent"));
+  check("rename: group children updated", JSON.stringify(CG.app.state().model.termByName("operations").children).includes("office_rent"));
+  check("rename: results updated", CG.app.state().results.results.office_rent && CG.app.state().results.results.office_rent.value === 2000);
+  const okR2 = CG.app.renameTerm("gross_total", "gross");
+  check("rename: formula refs updated", okR2 && CG.app.state().model.termByName("total_expenses").formula.includes("gross") && !CG.app.state().model.termByName("total_expenses").formula.includes("gross_total"), CG.app.state().model.termByName("total_expenses").formula);
+  const okR3 = CG.app.renameTerm("gross", "gross_total"); // back
+  check("rename: back works", okR3);
+  const okR4 = CG.app.renameTerm("office_rent", "rent");
+  check("rename: back (rent)", okR4);
+  check("rename: root intact", CG.app.state().model.root === "total_expenses");
+  const badR = CG.app.renameTerm("rent", "operations");
+  check("rename: collision rejected", badR === false);
+
+  // ---- unit library ----
+  const ulib = CG.units.load();
+  const uq = CG.units.quantities(ulib);
+  check("units: default quantities include Time/Length/Breadth", uq.includes("Time") && uq.includes("Length") && uq.includes("Breadth"), "got=" + uq.join(","));
+  check("units: default time units include year", CG.units.symbolsFor(ulib, "Time").includes("yr"));
+  const c1 = CG.units.addCustom({ quantity: "Test Q", name: "testunit", symbol: "tu" });
+  check("units: custom add ok", !!c1 && !c1.builtin);
+  const ulib2 = CG.units.load();
+  check("units: custom persisted to global library", ulib2.some(u => u.symbol === "tu"));
+  const beamModel = new CG.model.Model(CG.demos.beamDesign, []);
+  check("units: derived unit N*mm", CG.units.deriveUnit("point_load * span / 4", beamModel) === "N\u00b7mm", "got=" + CG.units.deriveUnit("point_load * span / 4", beamModel));
+  check("units: derived unit stress M/S", CG.units.deriveUnit("bending_moment / section_modulus", beamModel) === "N.mm/mm3", "got=" + CG.units.deriveUnit("bending_moment / section_modulus", beamModel));
+  check("units: derived unit symbol join uses \u00b7", CG.units.deriveUnit("point_load * span / 4", beamModel) === "N\u00b7mm");
+  CG.units.removeUnit(c1.id);
+  check("units: custom removed", !CG.units.load().some(u => u.id === c1.id));
+
+  // ---- parser rename helper ----
+  check("renameIdentifiers token-safe", CG.parser.renameIdentifiers("gross_total * (1 + tax_rate)", { gross_total: "gross" }) === "gross * (1 + tax_rate)");
+  check("renameIdentifiers no false positives", CG.parser.renameIdentifiers("salary + salaries", { salary: "base_salary" }) === "base_salary + salaries");
+
   console.log(failures === 0 ? "\nALL UI SMOKE TESTS PASSED" : "\n" + failures + " UI FAILURES");
 } catch (e) {
   failures++;

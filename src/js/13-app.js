@@ -14,6 +14,7 @@
     eqTab: "combined",
     expanded: new Set(),
     numeric: false,
+    treeCollapsed: new Set(),
     globalConstants: []
   };
   const dom = {};
@@ -47,8 +48,12 @@
 
     // header
     const hdr = el("header", "hdr");
-    const logo = el("div", "logo", "CalcGraph");
-    logo.appendChild(el("small", "", "Node-Based Calculator"));
+    const logo = el("div", "logo", "");
+    logo.appendChild(el("span", "logo-mark", "ƒ"));
+    const nameWrap = el("div", "", "");
+    nameWrap.appendChild(el("span", "logo-name", "CalcGraph"));
+    nameWrap.appendChild(el("small", "", "Node-Based Calculator"));
+    logo.appendChild(nameWrap);
     hdr.appendChild(logo);
     const sel = el("select", "");
     sel.id = "model-select";
@@ -80,7 +85,7 @@
     fv.id = "footer-value";
     const fh = el("span", "", "");
     fh.id = "footer-hint";
-    fh.textContent = "Click any block to inspect, edit or dive in · double-click groups to enter them · wheel to zoom";
+    fh.textContent = "right-drag to pan \u00b7 click any block to inspect \u00b7 double-click groups to dive in \u00b7 wheel to zoom";
     ftr.appendChild(fv); ftr.appendChild(el("span", "spacer")); ftr.appendChild(fh);
     root.appendChild(ftr);
 
@@ -110,6 +115,7 @@
   function expandAll() { if (!state.model) return; state.expanded = new Set(state.model.terms.map(t => t.name)); render(); }
   function collapseAll() { state.expanded = new Set(); render(); }
   function enterGroup(name) { state.scopePath.push(name); state.selected = name; render(); }
+  function toggleTree(name) { if (state.treeCollapsed.has(name)) state.treeCollapsed.delete(name); else state.treeCollapsed.add(name); render(); }
   function leaveGroup() { state.scopePath.pop(); render(); }
   function resetScope() { state.scopePath = []; render(); }
 
@@ -144,6 +150,39 @@
     commit();
   }
 
+  // Rename a term AND every reference to it (formulas, group children, root).
+  // A dry-run clone is validated first so a broken rename never mutates the model.
+  function renameTerm(oldName, newName) {
+    const m = state.model;
+    if (!m || !m.termByName(oldName)) return false;
+    if (oldName === newName) return true;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
+      toast("Term names must be letters, digits or underscore — no spaces.", "err"); return false;
+    }
+    if (m.termByName(newName)) { toast("A term named '" + newName + "' already exists.", "err"); return false; }
+    const applyRename = (data, o, n) => {
+      const map = { [o]: n };
+      for (const t of data.terms) {
+        if (t.kind === "formula" && t.formula) t.formula = CG.parser.renameIdentifiers(t.formula, map);
+        if (t.kind === "group" && Array.isArray(t.children)) t.children = t.children.map(c => c === o ? n : c);
+        if (t.name === o) t.name = n;
+      }
+      if (data.root === o) data.root = n;
+    };
+    const clone = JSON.parse(JSON.stringify(m.toJSON()));
+    applyRename(clone, oldName, newName);
+    try {
+      const test = new CG.model.Model(clone, state.globalConstants);
+      if (test.errors.length) { toast("Can't rename: " + test.errors[0], "err"); return false; }
+    } catch (e) { toast("Can't rename: " + e.message, "err"); return false; }
+    applyRename(m, oldName, newName);
+    m._index();
+    if (state.selected === oldName) state.selected = newName;
+    commit();
+    toast("Renamed '" + oldName + "' \u2192 '" + newName + "'.", "ok");
+    return true;
+  }
+
   function deleteTerm(name) {
     const m = state.model;
     const idx = m.terms.findIndex(t => t.name === name);
@@ -168,13 +207,14 @@
   function newModel() {
     const name = prompt("Name for the new model?", "My model");
     if (!name) return;
+    const rootName = (prompt("Root term name (the single final answer)?", "total") || "total").trim() || "total";
     const data = {
       formatVersion: "0.1",
       id: U.uid(),
       name,
       description: "",
-      root: "total",
-      terms: [{ id: U.uid(), kind: "value", name: "total", value: 0, period: "year", unit: "", description: "Root term of this model." }]
+      root: rootName,
+      terms: [{ id: U.uid(), kind: "value", name: rootName, value: 0, period: "", unit: "", description: "Root term of this model." }]
     };
     try {
       const m = importModel(JSON.stringify(data));
@@ -203,6 +243,7 @@
     state.selected = null;
     state.scopePath = [];
     state.expanded = new Set();
+    state.treeCollapsed = new Set();
     state.results = CG.evaluate.evaluateModel(state.model);
     const errs = state.model.errors;
     if (errs.length) toast("Model has issues: " + errs[0], "err");
@@ -302,26 +343,44 @@
     sb.appendChild(secModels);
     CG.storage.renderModelsList(savedList, app());
 
-    // outline
+    // outline — hierarchical tree with collapsible groups
     const secTree = el("div", "side-section");
     const tTitle = el("h3", "side-section-title", "MODEL · " + state.model.name);
     secTree.appendChild(tTitle);
     const tree = el("ul", "tree");
-    const groups = state.model.terms.filter(t => t.kind === "group");
-    const others = state.model.terms.filter(t => t.kind !== "group");
-    const order = (t) => t.name === state.model.root ? 0 : t.kind === "group" ? 1 : 2;
-    const all = [...groups, ...others].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
-    for (const t of all) {
-      const li = el("li", (t.kind === "group" ? "grp " : t.kind === "formula" ? "formula " : "value ") + (state.selected === t.name ? "sel" : ""));
-      li.dataset.name = t.name;
-      const nm = el("span", "", t.name);
-      const val = state.results && state.results.results[t.name];
-      const v = el("span", "val", val ? (val.value !== undefined ? U.fmt(val.value) : "⚠") : "");
-      li.appendChild(nm); li.appendChild(v);
-      li.addEventListener("click", () => select(t.name));
-      li.addEventListener("dblclick", () => { if (t.kind === "group") enterGroup(t.name); });
-      tree.appendChild(li);
+    const childrenOf = new Map();
+    const hasParent = new Set();
+    for (const t of state.model.terms) {
+      if (t.kind === "group" && Array.isArray(t.children)) for (const c of t.children) {
+        if (!childrenOf.has(t.name)) childrenOf.set(t.name, []);
+        childrenOf.get(t.name).push(c);
+        hasParent.add(c);
+      }
     }
+    const order = (t) => t.name === state.model.root ? 0 : t.kind === "group" ? 1 : 2;
+    const topLevel = state.model.terms.filter(t => !hasParent.has(t.name)).sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
+    const walk = (name, depth) => {
+      const t = state.model.termByName(name);
+      if (!t) return;
+      const isGroup = t.kind === "group";
+      const kids = childrenOf.get(name) || [];
+      const isCollapsed = state.treeCollapsed.has(name);
+      const li = el("li", (isGroup ? "grp " : t.kind === "formula" ? "formula " : "value ") + (state.selected === name ? "sel" : ""));
+      li.dataset.name = name;
+      li.style.paddingLeft = (6 + depth * 16) + "px";
+      const caret = el("span", "caret", isGroup && kids.length ? (isCollapsed ? "▸" : "▾") : "");
+      if (isGroup && kids.length) caret.addEventListener("click", (ev) => { ev.stopPropagation(); toggleTree(name); });
+      li.appendChild(caret);
+      li.appendChild(el("span", "kind-ic " + t.kind, isGroup ? "▣" : t.kind === "formula" ? "ƒ" : "•"));
+      li.appendChild(el("span", "li-name", t.name));
+      const val = state.results && state.results.results[t.name];
+      li.appendChild(el("span", "val", val ? (val.value !== undefined ? U.fmt(val.value) : "⚠") : ""));
+      li.addEventListener("click", () => select(t.name));
+      li.addEventListener("dblclick", () => { if (isGroup) enterGroup(t.name); });
+      tree.appendChild(li);
+      if (isGroup && kids.length && !isCollapsed) for (const k of kids) walk(k, depth + 1);
+    };
+    for (const t of topLevel) walk(t.name, 0);
     secTree.appendChild(tree);
     const btnRow = el("div", "flex-row");
     const bAddTerm = el("button", "btn small", "+ New term");
@@ -394,7 +453,8 @@
 
     if (state.view === "graph") {
       const scope = state.scopePath.length ? state.scopePath[state.scopePath.length - 1] : null;
-      const layout = CG.layout.layoutGraph(state.model, state.results, scope);
+      // pass the RESULTS MAP (not the {results,root,contrib} wrapper) so node values render
+      const layout = CG.layout.layoutGraph(state.model, state.results ? state.results.results : {}, scope);
       const handlers = {
         onSelect: (n) => select(n),
         onEnter: (n) => enterGroup(n),
@@ -405,11 +465,16 @@
       if (state.selected) CG.graph.highlightSelection(viewRoot, state.selected);
       // zoom controls
       const zc = el("div", "graph-zoom");
-      const zi = el("button", "btn small", "+");     zi.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 0.85));
-      const zo = el("button", "btn small", "−"); zo.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 1.18));
-      const zf = el("button", "btn small", "fit");   zf.addEventListener("click", () => viewRoot.__cgReset && viewRoot.__cgReset());
+      const zi = el("button", "btn small", "+");     zi.title = "Zoom in";  zi.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 0.85));
+      const zo = el("button", "btn small", "\u2212"); zo.title = "Zoom out"; zo.addEventListener("click", () => CG.graph.zoomBy(viewRoot, 1.18));
+      const zf = el("button", "btn small", "\u2922"); zf.title = "Fit (centre the graph)"; zf.addEventListener("click", () => viewRoot.__cgReset && viewRoot.__cgReset());
       zc.appendChild(zi); zc.appendChild(zo); zc.appendChild(zf);
       viewRoot.appendChild(zc);
+      const hint = el("div", "graph-hint", "");
+      hint.appendChild(el("span", "", "right-drag \u21c4 pan"));
+      hint.appendChild(el("span", "", "wheel \u21bb zoom"));
+      hint.appendChild(el("span", "", "double-click \u25b8 enter group"));
+      viewRoot.appendChild(hint);
     } else {
       const body = el("div", "eq-scroll");
       body.style.cssText = "height:100%;overflow:auto;";
@@ -473,8 +538,8 @@
   const api = {
     init,
     state: stateView,
-    select, toggleExpand, expandAll, collapseAll, enterGroup, leaveGroup, resetScope,
-    updateTerm, addTerm, deleteTerm,
+    select, toggleExpand, expandAll, collapseAll, enterGroup, leaveGroup, resetScope, toggleTree,
+    updateTerm, addTerm, deleteTerm, renameTerm,
     addConstant, updateConstant, deleteConstant,
     importModel, loadModel, loadDemo, newModel,
     openBuilder: (name) => CG.builder.openBuilder(app(), name),

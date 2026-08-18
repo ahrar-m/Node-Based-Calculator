@@ -64,21 +64,29 @@
       if (!ranks.has(r)) ranks.set(r, []);
       ranks.get(r).push(n);
     }
-    const rankKeys = [...ranks.keys()].sort((a, b) => a - b);
-    const COLS = 260, ROWS = 84, NODE_W = 150, NODE_H = 48;
+    const COLS = 260, ROWS = 88, NODE_W = 158, NODE_H = 60;
     const nodes = [];
     let maxW = NODE_W, maxH = NODE_H;
+    const inCount = new Map(), outCount = new Map();
+    for (const e of edges) {
+      outCount.set(e.from, (outCount.get(e.from) || 0) + 1);
+      inCount.set(e.to, (inCount.get(e.to) || 0) + 1);
+    }
     for (const t of items) {
       const r = rank(t.name);
       const idx = ranks.get(r).indexOf(t.name);
       const x = 60 + r * COLS;
       const y = 40 + idx * ROWS;
-      let w = NODE_W;
-      const est = 30 + t.name.length * 7.6 + (t.kind === "value" ? 0 : 8);
-      w = Math.max(NODE_W, Math.min(220, est));
+      const est = 34 + t.name.length * 7.6 + (t.kind === "value" ? 0 : 8);
+      const w = Math.max(NODE_W, Math.min(230, est));
       const rv = results[t.name] || {};
       const val = rv.value !== undefined ? U.fmt(rv.value) : (rv.error || "?");
-      nodes.push({ name: t.name, kind: t.kind, x, y, w, h: NODE_H, value: { text: val, err: !!rv.error }, period: t.period, unit: t.unit || "" });
+      nodes.push({
+        name: t.name, kind: t.kind, x, y, w, h: NODE_H,
+        value: { text: val, err: !!rv.error },
+        period: t.period || "", unit: t.unit || "",
+        incoming: inCount.get(t.name) || 0, outgoing: outCount.get(t.name) || 0
+      });
       maxW = Math.max(maxW, x + w); maxH = Math.max(maxH, y + NODE_H + 20);
     }
     if (groupNode) {
@@ -86,9 +94,22 @@
       const idx = ranks.get(r) ? ranks.get(r).indexOf(groupNode.name) : 0;
       const x = 60 + r * COLS;
       const y = 40 + idx * ROWS;
-      nodes.push({ name: groupNode.name, kind: "group", x, y, w: NODE_W, h: NODE_H, value: (() => { const rv = results[groupNode.name] || {}; return { text: rv.value !== undefined ? U.fmt(rv.value) : (rv.error || "?"), err: !!rv.error }; })(), period: groupNode.period, unit: groupNode.unit || "" });
+      const rv = results[groupNode.name] || {};
+      nodes.push({
+        name: groupNode.name, kind: "group", x, y, w: NODE_W, h: NODE_H,
+        value: { text: rv.value !== undefined ? U.fmt(rv.value) : (rv.error || "?"), err: !!rv.error },
+        period: groupNode.period || "", unit: groupNode.unit || "",
+        incoming: inCount.get(groupNode.name) || 0, outgoing: outCount.get(groupNode.name) || 0
+      });
     }
-    return { nodes, edges, maxW, maxH };
+    // Content bounds so the graph can centre-fit the nodes (not left-pad).
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x - n.w / 2); maxX = Math.max(maxX, n.x + n.w / 2);
+      minY = Math.min(minY, n.y - n.h / 2); maxY = Math.max(maxY, n.y + n.h / 2);
+    }
+    const contentBox = { minX, minY, maxX, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
+    return { nodes, edges, maxW, maxH, contentBox };
   }
 
   CG.layout = { layoutGraph };

@@ -47,6 +47,9 @@ This gives you the visual you imagined **plus** a near-zero learning curve, **pl
 | Click any node to see what it's capable of | Inspector panel: human-written description + formula + inputs + usage |
 | Dynamic layouts (no fixed positions) | Auto-layout + pan/zoom; nothing is hand-positioned |
 | Basic math for v1 | + − × ÷, `sum`, `min`, `max`, `avg`, `round`, `if`, comparisons, and built-in period helpers (×52, ×12) |
+| User-configurable units per variable | Every term and constant has a unit picker: choose a **quantity** (Time, Length, Breadth, Area, Volume, Mass, Force, Pressure, Energy, Power, Temperature, Angle, Currency, Ratio, Count…) then a **symbol** (s, m, mm, N, MPa, USD…). Nothing is auto-assigned — you opt in. Custom units are saved to a **global unit library** (localStorage key `calcgraph.units.v1`) available in every model. Formula terms also show a **derived-unit hint** (e.g. `N·mm / mm³`) so you can check the units agree with the formula. |
+| Rename any variable | Term names are editable in the inspector; every reference (formulas, group children, root) is renamed automatically with token-accurate identifier replacement. |
+| Right-click graph panning | Right-drag (or middle-drag) pans the graph; wheel zooms; the **fit** button centres the whole graph instead of left-aligning it. |
 
 ## 5. The three artifacts you always have
 
@@ -59,6 +62,11 @@ This gives you the visual you imagined **plus** a near-zero learning curve, **pl
 - Tiny recursive-descent **parser** (our own, ~300 lines) so symbolics stay exact and dependency-free.
 - **Topological evaluation** with memoization and **cycle detection**; live recompute the instant a constant changes (sliders).
 - **Symbolic layer:** every term carries a `value` and an `expression`. A parent's expression = substituting its children's expressions; simplification folds constants and cancels trivial terms. **Expansion is on-demand** (never fully expanded by default — that would be unreadable; this is the trick that makes drill-down work).
+
+## 6.5 Units & periods
+
+- **Periods** are opt-in (`— no period —` by default): `once`, `week`, `month`, `year` convert automatically at use sites (×52, ×12). New terms are created with **no** period and **no** unit.
+- **Units** are labels chosen from the quantity→symbol picker. A lightweight dimensional walk of the formula AST derives a suggested unit for formula terms, used as a check hint — the user's own unit symbol remains authoritative (numeric conversion is a roadmap item).
 
 ## 7. Suggested UX layout
 

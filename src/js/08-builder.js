@@ -235,6 +235,20 @@
     fChildren.appendChild(childRow);
     body.appendChild(fChildren);
 
+    // unit + period — nothing is auto-assigned; the user opts in.
+    const pickedUnit = { v: "" };
+    const fUnit = el("div", "field");
+    fUnit.appendChild(el("label", "", "Unit (optional — quantity \u2192 symbol)"));
+    fUnit.appendChild(CG.units.renderUnitPicker(app(), { value: "", onPick: (sym) => { pickedUnit.v = sym; } }));
+    body.appendChild(fUnit);
+
+    const pickedPeriod = { v: "" };
+    const fPeriod = el("div", "field");
+    fPeriod.appendChild(el("label", "", "Period (optional — value counted per week / month / year)"));
+    const pSel = CG.units.periodSelect("", (v) => { pickedPeriod.v = v; });
+    fPeriod.appendChild(pSel);
+    body.appendChild(fPeriod);
+
     const sync = () => {
       fVal.style.display = kindSel.value === "value" ? "" : "none";
       fFormula.style.display = kindSel.value === "formula" ? "" : "none";
@@ -252,7 +266,7 @@
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { app.toast("Name must be letters/digits/underscore, no spaces.", "err"); return; }
       if (app.state().model.termByName(name)) { app.toast("A term named '" + name + "' already exists.", "err"); return; }
       const kind = kindSel.value;
-      const term = { id: U.uid(), kind, name, description: "", period: kind === "group" ? "year" : kind === "value" ? "once" : "year", unit: "" };
+      const term = { id: U.uid(), kind, name, description: "", period: pickedPeriod.v || "", unit: pickedUnit.v };
       if (kind === "value") term.value = Number(valInput.value || 0);
       if (kind === "formula") term.formula = formulaInput.value.trim();
       if (kind === "group") term.children = chosen;

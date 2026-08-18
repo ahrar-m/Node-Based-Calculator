@@ -4,7 +4,9 @@
 
 ## Feature summary
 - 🧩 **Equation builder UI** — add term names, pick operators/functions from buttons, live parse + value preview, see how each piece attaches into the main formula
-- 🔗 **Auto-generated graph view** — departments as blocks, wires drawn for you; click to inspect, double-click groups to dive in (breadcrumbs)
+- 🔗 **Auto-generated graph view** — departments as blocks, glowing wires drawn for you; click to inspect, double-click groups to dive in, **right-drag to pan**, wheel to zoom, one-click centred **fit**
+- ✏️ **Rename any variable** — edit a term's name and every formula/group/root reference updates automatically
+- 📏 **Per-variable units** — pick a quantity (Time, Length, Breadth, Area, Volume, Force, Pressure, Currency…) then a symbol for every term and constant; **custom units saved to a global library**. Formula terms show a derived-unit hint (e.g. `N·mm / mm³`). Nothing is auto-assigned.
 - 🧮 **Expandable combined equation** — substitute and collapse any term, toggle numeric substitution
 - 📚 **Constant libraries** — per-project and global, with sliders (min/max/step) and saved snapshots
 - 🤖 **AI-ready import** — paste any AI's JSON output, or load a file; model format + prompt template in [docs/AI_PROMPT.md](docs/AI_PROMPT.md)
@@ -31,7 +33,7 @@ src/
   index.html          # shell (template)
   manifest.json       # module order used by build.mjs
   styles/             # 01-base, 02-layout, 03-components, 04-graph, 05-equation
-  js/                 # model, parser, evaluate, equation, layout, graph,
+  js/                 # model, parser, evaluate, equation, layout, graph, units,
                       # inspector, builder, libraries, storage, import, demos, app
 examples/             # *.model.json — also injected into the app as demos
 build.mjs             # the joiner script

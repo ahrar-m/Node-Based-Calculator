@@ -16,7 +16,7 @@
     const parts = [];
     if (t.unit) parts.push(U.esc(t.unit));
     if (t.period) parts.push(U.esc(t.period));
-    return parts.length ? " " + parts.join(" ") : "";
+    return parts.length ? " " + parts.join(" \u00b7 ") : "";
   }
 
   // ctx = { model, results (the results MAP!), expanded:Set, numeric:bool, maxDepth:int }
@@ -37,7 +37,9 @@
   }
 
   function nameSpan(name, model) {
-    return '<span class="eq-name ' + kindCls(name, model) + '" data-name="' + U.esc(name) + '">' + U.esc(name) + '</span>';
+    const t = model.termByName(name);
+    const unit = t && t.unit ? '<span class="eq-u">' + U.esc(t.unit) + "</span>" : "";
+    return '<span class="eq-name ' + kindCls(name, model) + '" data-name="' + U.esc(name) + '">' + U.esc(name) + unit + '</span>';
   }
   function numSpan(text) {
     return '<span class="eq-num">' + U.esc(text) + '</span>';
@@ -102,7 +104,7 @@
     const { model, expanded, maxDepth, numeric } = ctx;
     const child = model.termByName(name);
     const cobj = model.constantByName(name);
-    if (cobj && numeric) return numSpan(U.fmt(Number(cobj.value)));
+    if (cobj && numeric) return numSpan(U.fmt(Number(cobj.value)) + (cobj.unit ? ' ' + U.esc(cobj.unit) : ""));
     const factor = child ? U.periodFactor(child.period || "once", parentTerm.period || "once") : 1;
     const expandHere = child && expanded.has(name) && depth < maxDepth;
     let core;
@@ -131,9 +133,10 @@
       } else def = "";
       const r = results[t.name] || {};
       const val = r.value !== undefined ? U.fmt(r.value) : (r.error || "?");
-      const mark = t.name === model.root ? '<span class="eq-badge">root</span>' : "";
-      rows.push('<div class="eq-line"><span class="eq-name ' + t.kind + (t.name === model.root ? " sel" : "") + '" data-name="' + U.esc(t.name) + '">' + U.esc(t.name) + '</span>' +
-        '<span class="eq-op"> = </span>' + def + '<span class="eq-val">— ' + U.esc(val) + '</span>' + mark +
+      const mark = t.name === model.root ? '<span class="eq-badge root">root</span>' : "";
+      const unit = t.unit ? '<span class="eq-u">' + U.esc(t.unit) + "</span>" : "";
+      rows.push('<div class="eq-line"><span class="eq-name ' + t.kind + (t.name === model.root ? " sel" : "") + '" data-name="' + U.esc(t.name) + '">' + U.esc(t.name) + unit + '</span>' +
+        '<span class="eq-op"> = </span>' + def + '<span class="eq-val">\u2192 ' + U.esc(val) + '</span>' + mark +
         '<span class="eq-badge">' + U.esc(t.kind) + '</span></div>');
     }
     return rows.join("\n");
