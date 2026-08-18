@@ -47,6 +47,7 @@ class ElStub {
     return true;
   }
   focus() {} click() {}
+  remove() { if (this.parentNode) this.parentNode.removeChild(this); }
   querySelectorAll() { return []; }
   querySelector() { return null; }
 }
@@ -142,6 +143,30 @@ try {
 
   CG.app.openBuilder("total_expenses");
   check("builder modal opened", doc.body.children.some(c => (c.className || "").includes("modal-backdrop")));
+
+  // ---- "+ New term" button: must open its modal and actually create a term ----
+  const walkTree = (n, pred, out) => { if (pred(n)) out.push(n); for (const c of n.children || []) walkTree(c, pred, out); return out; };
+  const walkAll = (pred) => { const out = []; for (const root of docRoots.roots) walkTree(root, pred, out); return out; };
+  const openModals = () => walkAll(n => (n.className || "").includes("modal-backdrop"));
+  openModals().forEach(m => m.remove()); // close the builder modal left open above
+  const nBefore = CG.app.state().model.terms.length;
+  const btnNewTerm = walkAll(n => n.tagName === "BUTTON" && (n.textContent || "").trim() === "+ New term")[0];
+  check("new term: '+ New term' button present in sidebar outline", !!btnNewTerm);
+  btnNewTerm.dispatchEvent({ type: "click" });
+  const ntModals = openModals();
+  check("new term: button opens the modal without crashing", ntModals.length === 1);
+  const nm = ntModals[0];
+  const nameIn = walkTree(nm, n => n.placeholder === "e.g. total_expenses", [])[0];
+  const kindSel = walkTree(nm, n => n.tagName === "SELECT", [])[0];
+  const formulaIn = walkTree(nm, n => n.tagName === "TEXTAREA" && n.rows === 2, [])[0];
+  const createBtn = walkTree(nm, n => n.tagName === "BUTTON" && (n.textContent || "").trim() === "Create", [])[0];
+  check("new term: modal has name/kind/formula fields and a Create button", !!nameIn && !!kindSel && !!formulaIn && !!createBtn);
+  if (nameIn) nameIn.value = "smoke_new_term";
+  if (kindSel) kindSel.value = "formula";
+  if (formulaIn) formulaIn.value = "42";
+  createBtn.dispatchEvent({ type: "click" });
+  check("new term: term created via modal", !!CG.app.state().model.termByName("smoke_new_term"), "terms=" + CG.app.state().model.terms.length);
+  check("new term: model grew by exactly one", CG.app.state().model.terms.length === nBefore + 1);
 
   try { CG.app.addConstant({ id: "c-x", name: "test_const", value: 5, unit: "", description: "", slider: undefined, snapshots: undefined }, "project"); check("add project constant ok", true); }
   catch (e) { check("add project constant ok", false, e.message); }

@@ -239,7 +239,7 @@
     const pickedUnit = { v: "" };
     const fUnit = el("div", "field");
     fUnit.appendChild(el("label", "", "Unit (optional — quantity \u2192 symbol)"));
-    fUnit.appendChild(CG.units.renderUnitPicker(app(), { value: "", onPick: (sym) => { pickedUnit.v = sym; } }));
+    fUnit.appendChild(CG.units.renderUnitPicker(app, { value: "", onPick: (sym) => { pickedUnit.v = sym; } }));
     body.appendChild(fUnit);
 
     const pickedPeriod = { v: "" };

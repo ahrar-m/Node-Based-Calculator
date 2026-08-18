@@ -148,5 +148,38 @@ verified app. Numbered phases, each with what was done and why it mattered.
 51. Checks: engine smoke 26/26, ui-smoke 31/31 (new rename + units cases), bundle + audit
     clean. Rebuilt all three outputs, committed and pushed.
 
+## Phase 13 — Button-layout audit, "+ New term" fix, and operation docs (user request)
+
+52. **Button-placement audit.** Walked every button in `src/` (header: New model / Import /
+    Export JSON; view header: Graph/Equation + equation-mode Combined/All terms/Expand all/
+    Collapse all/Numbers = up to 7 buttons; sidebar: + New term, demos, constants, units;
+    inspector: delete / edit / make-root / slider / add-child; modals; graph zoom). Findings:
+    (a) header controls crowd below ~960 px with **no wrap**; (b) the equation view-header had
+    **no wrapping** for its 7-button cluster; (c) sidebar action rows were packed at 6 px gaps;
+    (d) the floating graph hint could overlap the zoom stack on narrow windows.
+53. **CSS fixes** in `src/styles/layout.css` + `graph.css`: `#app` rows become auto-height so the
+    header/footer can wrap (min-heights preserved), `.view-header` wraps its button cluster,
+    sidebar rows relax to 8 px and the new-term row gets breathing room, responsive
+    breakpoints at 1120/960/820 px shrink the workspace columns and header controls, and the
+    graph hint hides ≤700 px.
+54. **"+ New term" bug (user report: the button adds nothing).** Root cause: `openNewTerm`
+    called `CG.units.renderUnitPicker(app(), …)` — inside that module `app` is the API
+    **object**, so calling it as a function threw `TypeError: app is not a function` before
+    `document.body.appendChild(backdrop)` ran. The modal never opened — the click silently
+    did nothing. Fix: pass `app` (one character).
+55. **Regression coverage.** Extended `tools/ui-smoke.mjs`: clicks the actual "+ New term"
+    sidebar button, asserts the modal appears, fills name + formula, clicks Create, and
+    verifies the term landed in the model (ui-smoke 37 checks — 6 new).
+56. **README rewrite.** Added "What the tool provides" (feature table), "How to operate"
+    (12-step guide + graph gesture cheat-sheet), and "What to look out for" (user-facing
+    pitfalls: local-only autosave, identifier names, global rename without undo, period
+    multiplication, groups-have-no-formula, cycle guard, AI import schema, built-HTML rule,
+    v1 math scope).
+57. **AGENT.md update.** New working rule 7: every session agent must keep the session
+    to-do list updated after every single task, and refresh it at session start. Session log,
+    test counts, and next-session checklist updated accordingly.
+58. Rebuilt all three outputs; engine 26/26, ui-smoke 37/37, bundle + audit clean; committed
+    and pushed.
+
 ---
 *Append new phases here in later sessions so the history stays complete.*

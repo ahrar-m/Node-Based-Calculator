@@ -47,6 +47,13 @@ serving root `index.html`; shareable `calcgraph.html` is also committed).
 6. Keep the working tree clean when you finish (no stray debug files, no node_modules).
    Update this file + `inputs/agent-journey.md` whenever behavior, decisions, or the
    architecture change.
+7. **Keep the session to-do list live — never forget to update it.** At the very start of
+   every session, create/refresh the session to-do list (the todo-list tool): plan every
+   pending task before starting. After completing **every single task or subtask** (a fix,
+   a check pass, a doc update, a commit), update the list **immediately** — mark the
+   finished item done and add any newly discovered follow-ups. Never batch the update at
+   the end and never leave finished work unlisted. A session is only "done" when the list
+   is fully checked off or every remaining item is deliberately parked.
 
 ---
 
@@ -98,8 +105,8 @@ build.mjs               <- the joiner: src/ -> standalone HTML files
 tools/
   dom-stub.mjs          <- shared minimal DOM/browser stubs for headless tests
   serve.mjs             <- zero-dep local preview server (http://localhost:8080)
-  smoke.mjs             <- engine tests (29) from src/
-  ui-smoke.mjs          <- boots BUILT docs/index.html with DOM stubs; 12 UI checks
+  smoke.mjs             <- engine tests (26) from src/
+  ui-smoke.mjs          <- boots BUILT docs/index.html with DOM stubs; 37 UI checks
   bundle-check.mjs      <- executes the BUILT bundle in a VM; confirms demos + API
   audit.mjs             <- verifies zero external dependencies in the built HTML
 package.json            <- scripts: build / serve / verify
@@ -113,8 +120,8 @@ README.md               <- user-facing instructions
 ```bash
 node build.mjs              # join src/ -> docs/index.html, index.html, calcgraph.html
 node tools/serve.mjs        # preview at http://localhost:8080
-node tools/smoke.mjs        # 29 engine tests (parse, eval, periods, equations, validation)
-node tools/ui-smoke.mjs     # boot BUILT docs/index.html with DOM stubs; 12 UI checks
+node tools/smoke.mjs        # 26 engine tests (parse, eval, periods, equations, validation)
+node tools/ui-smoke.mjs     # boot BUILT docs/index.html with DOM stubs; 37 UI checks
 node tools/bundle-check.mjs # execute BUILT bundle; confirm demos + API (root = 160056)
 node tools/audit.mjs        # confirm zero external URLs/scripts/links
 ```
@@ -204,6 +211,22 @@ No `npm install` needed for anything.
   Also `tools/audit.mjs` (`3da06e3`) and steady-state rebuilds.
 - **Session 3 (docs):** added the agent working rules (this file) — never read built HTML,
   canonical change flow, pitfalls, session log. (This session.)
+- **Session 5 (buttons audit, new-term fix, docs):** (1) audited **every button placement**
+  (header, view header, sidebar outline/constants, inspector, modals): header logo+select+3
+  buttons+status crowded below ~960 px with no wrapping; the equation view-header carried up
+  to **7 buttons** with no wrap; sidebar rows sat 6 px apart; the graph hint could collide
+  with the zoom controls. Fixed in CSS: header/footer now wrap (auto-height rows with
+  min-heights), view-header wraps, sidebar rows are 8 px with a separated action row, three
+  responsive breakpoints (1120 / 960 / 820 px), graph hint hidden ≤700 px. (2) Fixed **"+ New term"
+  did nothing**: `openNewTerm` called `CG.units.renderUnitPicker(app(), …)` — inside that
+  function `app` is the API **object**, so calling it as a function threw a TypeError before
+  the modal was ever appended (silent no-op). Now passes `app`. (3) Added a ui-smoke
+  regression that clicks the real "+ New term" sidebar button, fills the modal, clicks
+  Create and asserts the term was added (ui-smoke now 37 checks). (4) Rewrote README.md:
+  "What the tool provides", "How to operate" step-by-step, "What to look out for".
+  (5) Added this file's rule 7: keep the session to-do list updated after every task.
+  Rebuilt all outputs; all four checks green; committed and pushed.
+
 - **Session 4 (features + redesign):** (1) **editable variable names** — inspector name field +
   `app.renameTerm` with token-based `renameIdentifiers` (formulas, group children, root all
   propagate; dry-run validation first). (2) **user-configured unit system** — new `src/js/06-units.js`:
@@ -219,8 +242,10 @@ No `npm install` needed for anything.
 
 ## 11. Suggested actions for the NEXT session
 
-1. Read this file, then [inputs/user-brief.md](inputs/user-brief.md) and
+1. **Create or refresh the session to-do list first**, then read this file, then
+   [inputs/user-brief.md](inputs/user-brief.md) and
    [inputs/discovery-qa.md](inputs/discovery-qa.md) — do NOT open built HTML files.
+   Update the to-do list after **every** task (working rule 7).
 2. If the user reports a UI problem: run `node tools/ui-smoke.mjs` first (it boots the
    real bundle), then investigate `src/`.
 3. If the user wants a new feature: add it to `src/`, rebuild, run all four checks,
@@ -240,5 +265,6 @@ No `npm install` needed for anything.
    (Never read the built HTML files.)
 
 ---
-*Last updated: session 3 — added agent working rules (never read built HTML), pitfalls,
-session log, and next-session checklist.*
+*Last updated: session 5 — button-layout audit + CSS fixes, "+ New term" bug fix + regression
+checks, README operation guide, and working rule 7 (keep the session to-do list updated after
+every task).*
