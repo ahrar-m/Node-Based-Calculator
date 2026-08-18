@@ -54,11 +54,14 @@ A model is a single JSON file. It can be written by hand, exported from the app,
   "period": "year",
   "unit": "USD",
   "description": "Everything needed to run the core work.",
-  "children": ["salaries", "rent", "utilities"]   // term names or inline term objects
+  "children": ["salaries", "rent", "utilities"]   // term names (spaces allowed: "Office Rent") or inline term objects
 }
 ```
 
-Every term may carry: `id` (unique), `kind`, `name` (unique identifier: letters/digits/underscore only), `description` (plain language — shown when the user clicks the block), `formula`, `period`, `unit`, `slider`, `snapshots`.
+Every term may carry: `id` (unique), `kind`, `name` (unique; **spaces are allowed** — e.g. `Office Rent`), `description` (plain language — shown when the user clicks the block), `formula`, `period`, `unit`, `slider`, `snapshots`.
+
+> **Names with spaces.** "name" values may contain spaces (and most printable characters). Since a formula is a text expression, any name that contains a space (or isn't a plain identifier like `tax_rate`) must be wrapped in double quotes wherever it appears in a formula:
+> `"Office Rent" + "Internet" * 1.1`. Unquoted identifier names keep working exactly as before.
 
 ## Units & quantities (v0.2 UI, compatible with v0.1 data)
 
@@ -83,8 +86,13 @@ Built-in helpers usable inside formulas: `weekly(x)`, `monthly(x)`, `yearly(x)`.
 ## Formula syntax (v0.1)
 
 - References are term names or library constant names: `rent + salaries * 1.1`.
+- Names with spaces are quoted: `"Office Rent" + "Internet"`. Quoted and unquoted names can be mixed freely.
 - Operators: `+ - * / ^` and parentheses.
 - Functions: `sum(...)`, `min(...)`, `max(...)`, `avg(...)`, `round(x, digits)`, `if(cond, a, b)`, comparisons `> < >= <= == !=`.
+
+## How the app stores formulas (v0.2, files stay v0.1-compatible)
+
+Inside the running app, every formula is compiled to an **id-based form**: references are replaced by the referenced term's/constant's stable `id` (e.g. ``t-rent` + `c-tax-rate``). The UI always displays the human, name-based form (spaces included), and **exported JSON is decompiled back to readable names**, so files remain exactly as the v0.1 format — any AI can read them. The benefit: **renaming a term is a pure label change** — no formula ever breaks.
 
 ## Resolution & validation
 

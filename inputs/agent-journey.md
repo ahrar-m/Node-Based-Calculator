@@ -197,5 +197,50 @@ verified app. Numbered phases, each with what was done and why it mattered.
     loop) — so a bare instruction is now a complete, self-contained workflow. Reading order
     and next-session checklist updated to start at §0. Committed and pushed.
 
+## Session 6 — names with spaces + id-based internal references
+
+**The user's ask (verbatim):** "I want the tool to be workable with The formula names and
+file names That includes spaces as well."
+
+**Clarifying Q&A (recorded verbatim):**
+- Q (quoting in formulas): *"Maybe use some kind of logic in the back end so that all the
+  back end uses some kind of a number to reference these but just for displaying you will
+  have to display the one with the spaces as well"* (custom answer) — locks in an
+  **id-based internal reference** design: formulas reference terms/constants by stable id,
+  the UI shows the human names (spaces included).
+- Q (scope): **"Terms AND constants (Recommended)"** — both may contain spaces.
+- Q (file names): **"Accept everywhere + use filename as model name on upload
+  (Recommended)"** — spaces fine in every name; an uploaded `My Budget.model.json`
+  without a JSON `name` becomes the model `My Budget`.
+- Q (design confirm): **"Yes — build the id-based backend (Recommended)"**.
+
+**What was built:**
+1. Parser (`02-parser.js`): double-quoted name tokens (`"Office Rent"`), backtick id
+   tokens, AST `ref` nodes, `compileFormula`/`decompileFormula`, `refIds`,
+   `needsQuotes`/`quoteName`; `toSource` prints spaced names quoted; rename helper
+   is quote-aware.
+2. Model (`01-model.js`): `CG.util.validName` (spaces OK; quotes/backticks/control
+   chars banned) replaces `IDENT`; term/constant ids are guaranteed at load;
+   `validate()` compiles name-based formulas to id-based form first (idempotent);
+   `toJSON()` decompiles back to readable names; `fromJSON` accepts a name fallback.
+3. Evaluation/rendering: evaluator resolves refs by id; equation renderer and the units
+   derived-unit hint map ids → display names; graphs/layouts unchanged (names at the edge).
+4. UI: inspector + formula builder show decompiled names; chips insert quoted names for
+   spaced names; new-term and constant editors accept spaces; `renameTerm` is a pure
+   label change (no formula rewriting); import passes the uploaded file's name as the
+   model-name fallback.
+5. Demo: `examples/spaces-demo.model.json` (“Demo: spaced names”) — an expenses model
+   where every name has spaces; evaluates to 99,792/yr.
+6. Tests: smoke 26 → 39 checks (compile/decompile round-trip, spaced eval, rename
+   safety, unknown-name rejection, export decompiles); ui-smoke 37 → 40 (spaced rename,
+   quoted formula + decompiled view, modal fields).
+7. Docs: README, MODEL_FORMAT (name rules + quoting + "how the app stores formulas"),
+   AI_PROMPT (spaces + quoting rules), AGENT.md (§7 notes, §8 pitfalls, §9/§10 log),
+   decisions.md (D9).
+
+**Checks:** `node tools/smoke.mjs` 39/39 · `node tools/ui-smoke.mjs` 40/40 ·
+`node tools/bundle-check.mjs` clean (root 160,056) · `node tools/audit.mjs` zero external
+deps. All outputs rebuilt; committed with a detailed message and pushed to `main`.
+
 ---
 *Append new phases here in later sessions so the history stays complete.*

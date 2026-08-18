@@ -1,0 +1,97 @@
+{
+  "formatVersion": "0.1",
+  "id": "spaces-demo-v1",
+  "name": "Business Finances (names with spaces)",
+  "description": "The same expense rollup as the expenses demo, but every term and constant name contains spaces — proving names with spaces work end to end: typing, import, graph, equation, renaming and export.",
+  "root": "Total Expenses",
+  "libraries": [
+    {
+      "id": "lib-spaces",
+      "name": "Finance constants",
+      "constants": [
+        {
+          "id": "c-tax-rate",
+          "name": "Tax Rate",
+          "value": 0.08,
+          "unit": "ratio",
+          "description": "Effective annual tax rate applied to gross expenses.",
+          "slider": {
+            "min": 0,
+            "max": 0.25,
+            "step": 0.01
+          },
+          "snapshots": [
+            {
+              "label": "Low (5%)",
+              "value": 0.05
+            },
+            {
+              "label": "Current (8%)",
+              "value": 0.08
+            },
+            {
+              "label": "High (12%)",
+              "value": 0.12
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "terms": [
+    {
+      "id": "t-rent",
+      "kind": "value",
+      "name": "Office Rent",
+      "value": 2000,
+      "period": "month",
+      "unit": "USD",
+      "description": "Monthly rent for the office."
+    },
+    {
+      "id": "t-net",
+      "kind": "value",
+      "name": "Internet",
+      "value": 150,
+      "period": "month",
+      "unit": "USD",
+      "description": "Monthly internet bill."
+    },
+    {
+      "id": "t-mark",
+      "kind": "value",
+      "name": "Marketing",
+      "value": 800,
+      "period": "week",
+      "unit": "USD",
+      "description": "Weekly marketing spend."
+    },
+    {
+      "id": "t-eq",
+      "kind": "value",
+      "name": "Equipment",
+      "value": 25000,
+      "period": "once",
+      "unit": "USD",
+      "description": "One-time equipment purchase."
+    },
+    {
+      "id": "t-gross",
+      "kind": "formula",
+      "name": "Gross Total",
+      "formula": "sum(\"Office Rent\", \"Internet\", \"Marketing\", \"Equipment\")",
+      "period": "year",
+      "unit": "USD",
+      "description": "All expenses before tax, expressed yearly."
+    },
+    {
+      "id": "t-total",
+      "kind": "formula",
+      "name": "Total Expenses",
+      "formula": "\"Gross Total\" * (1 + \"Tax Rate\")",
+      "period": "year",
+      "unit": "USD",
+      "description": "The single final answer: yearly total including tax."
+    }
+  ]
+}

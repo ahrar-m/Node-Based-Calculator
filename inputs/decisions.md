@@ -52,6 +52,17 @@ it appears in `src/index.html` (title), `README.md`, `AGENT.md`, and the header 
 User chose "Both, as importable samples" for the P1 demo content → business-expenses and
 beam-design models are embedded in the app and shipped as `examples/*.model.json`.
 
+## D9 — Names may contain spaces; internal references are id-based (session 6)
+The user asked for the tool to work with "formula names and file names that includes spaces",
+and chose (via clarifying Q&A): **terms AND constants may contain spaces**; **file names with
+spaces accepted everywhere, and an uploaded file's name becomes the model name** when the JSON
+has none; and a custom design: **the back end references terms/constants by stable id while
+the UI displays the human names with spaces**.
+**Consequence:** formulas are stored and evaluated in a compiled id-based form (`\u0060t-rent\u0060`
+refs); display, typing, import and export work in name form (spaced names quoted as
+`"Office Rent"` in formula text); renaming a term is a pure label change; export JSON stays
+name-based so AI tools can still read it.
+
 ---
 *If a later session changes any decision, add a new D-entry above the old one's date and
 mark the old one superseded.*

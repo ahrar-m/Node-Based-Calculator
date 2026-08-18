@@ -6,7 +6,20 @@
   const PERIODS = { once: 1, week: 52, month: 12, year: 1 };
   const PERIOD_ORDER = ["once", "week", "month", "year"];
   const KINDS = ["value", "formula", "group"];
-  const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+  // Names may contain spaces (and most printable characters). Only the two
+  // characters reserved by the formula grammar are banned: double quotes
+  // (used to quote spaced names in formulas) and backticks (used for internal
+  // id references).
+  function validName(n) {
+    if (typeof n !== "string") return false;
+    const s = n.trim();
+    if (!s || s !== n) return false;                 // non-empty, no leading/trailing whitespace
+    if (s.length > 120) return false;
+    if (/["\u0060]/.test(s)) return false;          // reserved by the formula grammar
+    if (/[\u0000-\u001f\u007f]/.test(s)) return false; // no control characters
+    return true;
+  }
 
   function yearlyFactor(p) { return PERIODS[p] !== undefined ? PERIODS[p] : 1; }
   function periodFactor(child, parent) { return yearlyFactor(child) / yearlyFactor(parent); }
@@ -21,19 +34,19 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function uid() { return "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-  CG.util = { PERIODS, PERIOD_ORDER, yearlyFactor, periodFactor, fmt, esc, uid, IDENT };
+  CG.util = { PERIODS, PERIOD_ORDER, yearlyFactor, periodFactor, fmt, esc, uid, validName };
 
   class Model {
-    constructor(data, globalConstants) {
+    constructor(data, globalConstants, opts) {
       this.orig = data;
       this.formatVersion = data.formatVersion || "0.1";
       this.id = data.id || uid();
-      this.name = data.name || "Untitled model";
+      this.name = data.name || (opts && opts.nameFallback) || "Untitled model";
       this.description = data.description || "";
       this.root = data.root || "";
       this.libraries = Array.isArray(data.libraries) ? data.libraries : [];
       this.globalLibraries = Array.isArray(data.globalLibraries) ? data.globalLibraries : [];
-      this.terms = Array.isArray(data.terms) ? data.terms.map(t => ({ ...t, children: t.children ? [...t.children] : [] })) : [];
+      this.terms = Array.isArray(data.terms) ? data.terms.map(t => ({ ...t, id: t.id || uid(), children: t.children ? [...t.children] : [] })) : [];
       this.projectConstants = this.libraries.flatMap(l => (Array.isArray(l.constants) ? l.constants : []));
       this.globalConstants = Array.isArray(globalConstants) ? globalConstants : [];
       this._index();
@@ -44,21 +57,36 @@
       this.byId = new Map();
       this.byName = new Map();
       for (const t of this.terms) {
-        if (t.id) this.byId.set(t.id, t);
+        if (!t.id) t.id = uid();
+        this.byId.set(t.id, t);
         this.byName.set(t.name, t);
       }
       this.constantsByName = new Map();
-      for (const c of this.projectConstants) if (!this.constantsByName.has(c.name)) this.constantsByName.set(c.name, c);
-      for (const c of this.globalConstants) if (!this.constantsByName.has(c.name)) this.constantsByName.set(c.name, c);
+      this.constantsById = new Map();
+      const addConst = (c) => {
+        if (!c || !c.name) return;
+        if (!c.id) c.id = uid();
+        if (!this.constantsByName.has(c.name)) this.constantsByName.set(c.name, c);
+        if (!this.constantsById.has(c.id)) this.constantsById.set(c.id, c);
+      };
+      for (const c of this.projectConstants) addConst(c);
+      for (const c of this.globalConstants) addConst(c);
     }
 
     termByName(n) { return this.byName.get(n); }
     constantByName(n) { return this.constantsByName.get(n); }
+    termById(id) { return this.byId.get(id); }
+    constantById(id) { return this.constantsById.get(id); }
 
     depsOf(term) {
       if (term.kind === "group") return [...(term.children || [])];
       if (term.kind === "formula") {
-        try { return CG.parser.identifiers(term.formula); } catch { return []; }
+        try {
+          return CG.parser.refIds(term.formula)
+            .map(id => this.termById(id))
+            .filter(Boolean)
+            .map(t => t.name);
+        } catch { return []; }
       }
       return [];
     }
@@ -69,7 +97,10 @@
         if (t.name === name) continue;
         if (t.kind === "group" && (t.children || []).includes(name)) out.push(t.name);
         else if (t.kind === "formula") {
-          try { if (CG.parser.identifiers(t.formula).includes(name)) out.push(t.name); } catch {}
+          try {
+            const refs = CG.parser.refIds(t.formula).map(id => this.termById(id)).filter(Boolean).map(t => t.name);
+            if (refs.includes(name)) out.push(t.name);
+          } catch {}
         }
       }
       return out;
@@ -84,6 +115,14 @@
     validate() {
       const errs = [];
       if (!this.terms.length) errs.push("Model has no terms.");
+      // Compile name-based formulas to stable id-based form FIRST so every
+      // later check (references, deps, cycles, evaluation) sees the same
+      // canonical form. Compiling is idempotent on already-compiled formulas.
+      for (const t of this.terms) {
+        if (t.kind !== "formula") continue;
+        try { t.formula = CG.parser.compileFormula(t.formula, this); }
+        catch (e) { errs.push("Term '" + t.name + "': formula " + e.message); }
+      }
       const seenNames = new Set(), seenIds = new Set();
       const deps = new Map();
       for (const t of this.terms) {
@@ -92,7 +131,7 @@
         seenNames.add(t.name);
         if (t.id && seenIds.has(t.id)) errs.push("Term id '" + t.id + "' is used more than once.");
         if (t.id) seenIds.add(t.id);
-        if (!IDENT.test(t.name)) errs.push("Term name '" + t.name + "' is not a valid identifier (letters, digits, underscore).");
+        if (!validName(t.name)) errs.push("Term name '" + t.name + "' is not valid (spaces are fine \u2014 avoid quotes, backticks and control characters).");
         if (!KINDS.includes(t.kind)) errs.push("Term '" + t.name + "': unknown kind '" + t.kind + "'.");
         if (t.period && !PERIODS.hasOwnProperty(t.period)) errs.push("Term '" + t.name + "': invalid period '" + t.period + "'.");
         if (t.kind === "formula" && !t.formula) errs.push("Term '" + t.name + "': kind formula needs a formula.");
@@ -114,12 +153,12 @@
 
       for (const t of this.terms) {
         if (t.kind !== "formula") continue;
-        let names = [];
-        try { names = CG.parser.identifiers(t.formula); }
+        let refs = [];
+        try { refs = CG.parser.refIds(t.formula); }
         catch (e) { errs.push("Term '" + t.name + "': formula syntax error — " + e.message); continue; }
-        for (const ref of names) {
-          if (!this.byName.has(ref) && !this.constantsByName.has(ref))
-            errs.push("Term '" + t.name + "': references unknown name '" + ref + "'.");
+        for (const ref of refs) {
+          if (!this.byId.has(ref) && !this.constantsById.has(ref))
+            errs.push("Term '" + t.name + "': references unknown id '" + ref + "'.");
         }
       }
       for (const t of this.terms) {
@@ -160,17 +199,21 @@
         root: this.root,
         globalLibraries: [...this.globalLibraries],
         libraries: this.libraries,
-        terms: this.terms.map(t => JSON.parse(JSON.stringify(t)))
+        terms: this.terms.map(t => {
+          const c = JSON.parse(JSON.stringify(t));
+          if (c.formula) { try { c.formula = CG.parser.decompileFormula(c.formula, this); } catch {} }
+          return c;
+        })
       };
     }
 
-    static fromJSON(text, globalConstants) {
+    static fromJSON(text, globalConstants, opts) {
       let data;
       try { data = typeof text === "string" ? JSON.parse(text) : text; }
       catch (e) { throw new Error("Not valid JSON: " + e.message); }
       if (!data || typeof data !== "object" || !Array.isArray(data.terms))
         throw new Error("Model JSON must be an object with a 'terms' array.");
-      const m = new Model(data, globalConstants);
+      const m = new Model(data, globalConstants, opts || {});
       if (m.errors.length) throw new Error("Model has " + m.errors.length + " problem(s):\n- " + m.errors.join("\n- "));
       return m;
     }

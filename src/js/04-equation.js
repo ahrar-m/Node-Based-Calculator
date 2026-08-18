@@ -86,7 +86,8 @@
   function astHtml(ast, parentTerm, ctx, depth) {
     switch (ast.t) {
       case "num": return numSpan(CG.parser.toSource(ast));
-      case "name": return refInAst(ast.n, parentTerm, ctx, depth);
+      case "name": return refByName(ast.n, parentTerm, ctx, depth);
+      case "ref": return refById(ast.id, parentTerm, ctx, depth);
       case "un": return '<span class="eq-op">' + (ast.op === "-" ? "-" : "+") + '</span>' + astHtml(ast.e, parentTerm, ctx, depth);
       case "bin": {
         const op = ast.op === "*" ? X : ast.op === "/" ? D : ast.op;
@@ -100,22 +101,33 @@
     return "?";
   }
 
-  function refInAst(name, parentTerm, ctx, depth) {
+  // AST nodes are internal id references (compiled form); constants and
+  // terms are resolved by id, then everything downstream keeps using their
+  // human names (spaces included) for nesting, expansion and display.
+  function refById(id, parentTerm, ctx, depth) {
+    const { model } = ctx;
+    return refCore(id, model.termById(id), model.constantById(id), parentTerm, ctx, depth);
+  }
+  function refByName(name, parentTerm, ctx, depth) {
+    const { model } = ctx;
+    return refCore(name, model.termByName(name), model.constantByName(name), parentTerm, ctx, depth);
+  }
+  function refCore(key, child, cobj, parentTerm, ctx, depth) {
     const { model, expanded, maxDepth, numeric } = ctx;
-    const child = model.termByName(name);
-    const cobj = model.constantByName(name);
+    if (!child && !cobj) return '<span class="eq-name">?' + U.esc(key) + '</span>';
+    const nm = child ? child.name : cobj.name;
     if (cobj && numeric) return numSpan(U.fmt(Number(cobj.value)) + (cobj.unit ? ' ' + U.esc(cobj.unit) : ""));
     const factor = child ? U.periodFactor(child.period || "once", parentTerm.period || "once") : 1;
-    const expandHere = child && expanded.has(name) && depth < maxDepth;
+    const expandHere = child && expanded.has(nm) && depth < maxDepth;
     let core;
     if (expandHere) {
-      const inner = exprHtml(name, ctx, depth);
+      const inner = exprHtml(nm, ctx, depth);
       core = child.kind !== "value" ? paren(inner) : inner;
     } else if (child && numeric && child.kind === "value") {
-      const r = ctx.results && ctx.results[name];
+      const r = ctx.results && ctx.results[nm];
       core = numSpan(r && r.value !== undefined ? U.fmt(r.value) : "?");
     } else {
-      core = nameSpan(name, model);
+      core = nameSpan(nm, model);
     }
     return core + factorSuffix(factor);
   }
@@ -128,7 +140,15 @@
       else if (t.kind === "group") {
         def = (t.children || []).map(c => '<span class="eq-name group" data-name="' + U.esc(c) + '">' + U.esc(c) + '</span>').join('<span class="eq-op"> + </span>');
       } else if (t.formula) {
-        try { def = CG.parser.toSource(CG.parser.simplify(CG.parser.parse(t.formula))).replace(/\*/g, X).replace(/\//g, D); }
+        try {
+          const src = CG.parser.toSource(CG.parser.simplify(CG.parser.parse(t.formula)), 0, {
+            byId: (id) => {
+              const tt = model.termById(id); if (tt) return tt.name;
+              const cc = model.constantById(id); return cc ? cc.name : null;
+            }
+          });
+          def = src.replace(/\*/g, X).replace(/\//g, D);
+        }
         catch { def = '<span class="eq-name" style="color:var(--err)">syntax error</span>'; }
       } else def = "";
       const r = results[t.name] || {};

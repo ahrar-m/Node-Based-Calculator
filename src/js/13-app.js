@@ -150,32 +150,24 @@
     commit();
   }
 
-  // Rename a term AND every reference to it (formulas, group children, root).
-  // A dry-run clone is validated first so a broken rename never mutates the model.
+  // Renaming is a pure label change: formulas reference terms by stable id,
+  // so nothing needs rewriting — only the display name, any group-child
+  // lists (those use names), and the root pointer are updated.
   function renameTerm(oldName, newName) {
     const m = state.model;
     if (!m || !m.termByName(oldName)) return false;
     if (oldName === newName) return true;
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
-      toast("Term names must be letters, digits or underscore — no spaces.", "err"); return false;
+    if (!U.validName(newName)) {
+      toast("Names can include spaces — just no quotes, backticks or control characters.", "err"); return false;
     }
     if (m.termByName(newName)) { toast("A term named '" + newName + "' already exists.", "err"); return false; }
-    const applyRename = (data, o, n) => {
-      const map = { [o]: n };
-      for (const t of data.terms) {
-        if (t.kind === "formula" && t.formula) t.formula = CG.parser.renameIdentifiers(t.formula, map);
-        if (t.kind === "group" && Array.isArray(t.children)) t.children = t.children.map(c => c === o ? n : c);
-        if (t.name === o) t.name = n;
-      }
-      if (data.root === o) data.root = n;
-    };
-    const clone = JSON.parse(JSON.stringify(m.toJSON()));
-    applyRename(clone, oldName, newName);
-    try {
-      const test = new CG.model.Model(clone, state.globalConstants);
-      if (test.errors.length) { toast("Can't rename: " + test.errors[0], "err"); return false; }
-    } catch (e) { toast("Can't rename: " + e.message, "err"); return false; }
-    applyRename(m, oldName, newName);
+    const t = m.termByName(oldName);
+    t.name = newName;
+    for (const tr of m.terms) {
+      if (tr.kind === "group" && Array.isArray(tr.children))
+        tr.children = tr.children.map(c => c === oldName ? newName : c);
+    }
+    if (m.root === oldName) m.root = newName;
     m._index();
     if (state.selected === oldName) state.selected = newName;
     commit();
@@ -222,8 +214,8 @@
     } catch (e) { toast(e.message, "err"); }
   }
 
-  function importModel(text) {
-    const m = CG.model.Model.fromJSON(text, state.globalConstants);
+  function importModel(text, nameFallback) {
+    const m = CG.model.Model.fromJSON(text, state.globalConstants, { nameFallback: nameFallback || "" });
     const list = CG.storage.loadModels();
     const entry = { id: m.id, name: m.name, updatedAt: Date.now(), model: m.toJSON() };
     const idx = list.findIndex(x => x.id === m.id);
@@ -391,7 +383,9 @@
       bDemo1.addEventListener("click", () => loadDemo("businessExpenses"));
       const bDemo2 = el("button", "btn small", "Demo: beam");
       bDemo2.addEventListener("click", () => loadDemo("beamDesign"));
-      btnRow.appendChild(bDemo1); btnRow.appendChild(bDemo2);
+      const bDemo3 = el("button", "btn small", "Demo: spaced names");
+      bDemo3.addEventListener("click", () => loadDemo("spacesDemo"));
+      btnRow.appendChild(bDemo1); btnRow.appendChild(bDemo2); btnRow.appendChild(bDemo3);
     }
     secTree.appendChild(btnRow);
     sb.appendChild(secTree);

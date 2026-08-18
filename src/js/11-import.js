@@ -45,10 +45,14 @@
     tPaste.addEventListener("click", () => { tPaste.classList.add("active"); tFile.classList.remove("active"); pastePane.style.display = ""; filePane.style.display = "none"; });
     tFile.addEventListener("click", () => { tFile.classList.add("active"); tPaste.classList.remove("active"); pastePane.style.display = "none"; filePane.style.display = ""; });
 
+    const fileNameToModelName = (fn) => (fn || "").replace(/\.model\.json$/i, "").replace(/\.json$/i, "").trim();
     const tryImport = (text, sourceName) => {
       clear(errBox);
       try {
-        const model = app.importModel(text);
+        // When a JSON file is uploaded and its content has no "name", the
+        // file's own name (spaces included) becomes the model name.
+        const fallback = sourceName && /\.json$/i.test(sourceName) ? fileNameToModelName(sourceName) : "";
+        const model = app.importModel(text, fallback);
         backdrop.remove();
         app.toast("Imported '" + model.name + "' — " + model.terms.length + " terms.", "ok");
       } catch (e) {

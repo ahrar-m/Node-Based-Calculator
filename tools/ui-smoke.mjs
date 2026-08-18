@@ -156,7 +156,7 @@ try {
   const ntModals = openModals();
   check("new term: button opens the modal without crashing", ntModals.length === 1);
   const nm = ntModals[0];
-  const nameIn = walkTree(nm, n => n.placeholder === "e.g. total_expenses", [])[0];
+  const nameIn = walkTree(nm, n => (n.placeholder || "").includes("total_expenses"), [])[0];
   const kindSel = walkTree(nm, n => n.tagName === "SELECT", [])[0];
   const formulaIn = walkTree(nm, n => n.tagName === "TEXTAREA" && n.rows === 2, [])[0];
   const createBtn = walkTree(nm, n => n.tagName === "BUTTON" && (n.textContent || "").trim() === "Create", [])[0];
@@ -167,6 +167,17 @@ try {
   createBtn.dispatchEvent({ type: "click" });
   check("new term: term created via modal", !!CG.app.state().model.termByName("smoke_new_term"), "terms=" + CG.app.state().model.terms.length);
   check("new term: model grew by exactly one", CG.app.state().model.terms.length === nBefore + 1);
+  // names with spaces: rename a term to a spaced name and assert it round-trips
+  const okSp = CG.app.renameTerm("smoke_new_term", "Office Rent");
+  check("spaces: rename to spaced name accepted", okSp === true);
+  check("spaces: spaced name resolves + formula still evaluates", !!CG.app.state().model.termByName("Office Rent") && CG.app.state().results.results["Office Rent"].value === 42);
+  check("spaces: spaced name usable in formula + decompiled view", (() => {
+    const t = CG.app.state().model.termByName("Office Rent");
+    t.formula = CG.parser.compileFormula('"rent" + 1', CG.app.state().model);
+    CG.app.commit();
+    const f = CG.parser.decompileFormula(t.formula, CG.app.state().model);
+    return f === "rent + 1" && CG.app.state().results.results["Office Rent"] && CG.app.state().results.results["Office Rent"].value === 24001;
+  })(), true);
 
   try { CG.app.addConstant({ id: "c-x", name: "test_const", value: 5, unit: "", description: "", slider: undefined, snapshots: undefined }, "project"); check("add project constant ok", true); }
   catch (e) { check("add project constant ok", false, e.message); }
@@ -177,8 +188,9 @@ try {
   check("rename: term renamed", !!CG.app.state().model.termByName("office_rent") && !CG.app.state().model.termByName("rent"));
   check("rename: group children updated", JSON.stringify(CG.app.state().model.termByName("operations").children).includes("office_rent"));
   check("rename: results updated", CG.app.state().results.results.office_rent && CG.app.state().results.results.office_rent.value === 2000);
+  const fBefore = CG.app.state().model.termByName("total_expenses").formula;
   const okR2 = CG.app.renameTerm("gross_total", "gross");
-  check("rename: formula refs updated", okR2 && CG.app.state().model.termByName("total_expenses").formula.includes("gross") && !CG.app.state().model.termByName("total_expenses").formula.includes("gross_total"), CG.app.state().model.termByName("total_expenses").formula);
+  check("rename: formulas untouched (id-based refs)", okR2 && CG.app.state().model.termByName("total_expenses").formula === fBefore, CG.app.state().model.termByName("total_expenses").formula);
   const okR3 = CG.app.renameTerm("gross", "gross_total"); // back
   check("rename: back works", okR3);
   const okR4 = CG.app.renameTerm("office_rent", "rent");

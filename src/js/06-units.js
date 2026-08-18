@@ -350,6 +350,7 @@
     switch (ast.t) {
       case "num": return "";
       case "name": return getUnit(ast.n) || "";
+      case "ref": return getUnit(ast.id) || "";
       case "un": return unitOfAst(ast.e, getUnit);
       case "bin": {
         const l = unitOfAst(ast.l, getUnit), r = unitOfAst(ast.r, getUnit);
@@ -383,10 +384,10 @@
     if (!formulaSrc || !model) return "";
     let ast;
     try { ast = CG.parser.parse(formulaSrc); } catch { return ""; }
-    const getUnit = (n) => {
-      const t = model.termByName(n);
+    const getUnit = (idOrName) => {
+      const t = model.termById(idOrName) || model.termByName(idOrName);
       if (t && t.unit) return t.unit;
-      const c = model.constantByName(n);
+      const c = model.constantById(idOrName) || model.constantByName(idOrName);
       if (c && c.unit) return c.unit;
       return "";
     };

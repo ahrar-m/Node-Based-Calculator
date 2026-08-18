@@ -39,17 +39,18 @@
           const ast = CG.parser.parse(term.formula);
           const env = {};
           let err = null;
-          const refs = CG.parser.identifiers(term.formula);
+          // Formulas are stored internally in id-based form; resolve refs by id.
+          const refs = CG.parser.refIds(term.formula);
           for (const ref of refs) {
-            const t = model.termByName(ref);
+            const t = model.termById(ref);
             if (t) {
               const ev = evalTerm(t);
-              if (ev.error) { err = ref + ": " + ev.error; break; }
+              if (ev.error) { err = t.name + ": " + ev.error; break; }
               const f = U.periodFactor(t.period || "once", term.period || "once");
               env[ref] = ev.value * f;
-              contrib.push({ parent: term.name, child: ref, factor: f, value: env[ref] });
+              contrib.push({ parent: term.name, child: t.name, factor: f, value: env[ref] });
             } else {
-              const c = model.constantByName(ref);
+              const c = model.constantById(ref);
               if (c !== undefined) env[ref] = Number(c.value);
               else { err = "unknown reference '" + ref + "'"; break; }
             }

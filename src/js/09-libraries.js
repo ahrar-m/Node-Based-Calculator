@@ -64,8 +64,8 @@
     modal.appendChild(body);
 
     const fName = el("div", "field");
-    fName.appendChild(el("label", "", "Name (as used in formulas)"));
-    const nameI = el("input", ""); nameI.value = existing ? existing.name : ""; nameI.placeholder = "tax_rate";
+    fName.appendChild(el("label", "", "Name (as used in formulas — spaces allowed, quoted when referenced)"));
+    const nameI = el("input", ""); nameI.value = existing ? existing.name : ""; nameI.placeholder = "tax_rate or Tax Rate";
     fName.appendChild(nameI); body.appendChild(fName);
 
     const fVal = el("div", "field");
@@ -133,7 +133,7 @@
     const save = el("button", "btn primary", "Save constant");
     save.addEventListener("click", () => {
       const name = nameI.value.trim();
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { app.toast("Constant name must be letters/digits/underscore.", "err"); return; }
+      if (!U.validName(name)) { app.toast("Constant name can include spaces — just no quotes, backticks or control characters.", "err"); return; }
       const value = Number(valI.value);
       if (!Number.isFinite(value)) { app.toast("Value must be a number.", "err"); return; }
       const obj = {

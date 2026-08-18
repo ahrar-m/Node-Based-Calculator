@@ -16,7 +16,8 @@ css = css.replace(/^@charset[^;]*;/gm, "");
 
 const demoFiles = [
   ["businessExpenses", "examples/business-expenses.model.json"],
-  ["beamDesign", "examples/beam-design.model.json"]
+  ["beamDesign", "examples/beam-design.model.json"],
+  ["spacesDemo", "examples/spaces-demo.model.json"]
 ];
 const demoJs = "(()=>{ const CG=(typeof window!=='undefined'?window:globalThis).CalcGraph=(typeof window!=='undefined'?window:globalThis).CalcGraph||{};" +
   demoFiles.map(([key, p]) => "CG.demos=CG.demos||{}; CG.demos." + key + "=" + JSON.stringify(JSON.parse(read(p))) + ";").join("") +

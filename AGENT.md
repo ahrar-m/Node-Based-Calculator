@@ -162,8 +162,8 @@ README.md               <- user-facing instructions
 ```bash
 node build.mjs              # join src/ -> docs/index.html, index.html, calcgraph.html
 node tools/serve.mjs        # preview at http://localhost:8080
-node tools/smoke.mjs        # 26 engine tests (parse, eval, periods, equations, validation)
-node tools/ui-smoke.mjs     # boot BUILT docs/index.html with DOM stubs; 37 UI checks
+node tools/smoke.mjs        # 39 engine tests (parse, eval, periods, equations, validation, spaces)
+node tools/ui-smoke.mjs     # boot BUILT docs/index.html with DOM stubs; 40 UI checks
 node tools/bundle-check.mjs # execute BUILT bundle; confirm demos + API (root = 160056)
 node tools/audit.mjs        # confirm zero external URLs/scripts/links
 ```
@@ -184,6 +184,14 @@ No `npm install` needed for anything.
 - **Grammar:** numbers, identifiers, `+ - * / ^ ( ) ,`, comparisons `== != < > <= >=`,
   functions `sum min max avg round if abs weekly monthly yearly` (weekly/monthly/yearly are
   identity placeholders — real conversion happens via term periods at use sites).
+- **Names may contain spaces** (`Office Rent`). In *formula text* a spaced name must be
+  double-quoted: `"Office Rent" + "Internet"`; plain identifier names need no quotes.
+- **Id-based internal references:** formulas are stored *compiled* — every term/constant
+  reference becomes a backtick id token (\`t-rent\` + 1). Display layers
+  (equation/inspector/builder/export) decompile ids back to human names via
+  `CG.parser.decompileFormula`. `Model.validate` compiles name-based input (idempotent);
+  `Model.toJSON` decompiles back to readable names. `renameTerm` is therefore a pure label
+  change (display name + group-children names + root pointer) — formulas never need rewriting.
 - **Combined equation:** render-time substitution; terms expand when in the `expanded`
   Set (root is force-expanded via `rootForce`/`rootName`); leaf values and constants
   substitute in numeric mode; period factors materialize as `× 12`; depth capped by
@@ -215,9 +223,16 @@ No `npm install` needed for anything.
   load; only save customs, never built-ins) — changing any shape? bump the version suffix.
 - **Graph node values showed "?"** → `layoutGraph` must receive the **results map**
   (`state.results.results`), never the `{results, root, contrib}` wrapper (fixed in session 4).
-- **`renameIdentifiers` is token-based**: never regex-replace term names in formulas blindly;
-  use `CG.parser.renameIdentifiers(src, {old:new})` (falls back to word-boundary regex only
-  when a formula won't tokenize).
+- **Never regex-replace term names in formulas.** Formulas are stored *compiled*: references
+  are backtick ids (\`t-rent\`), not names — display them with
+  `CG.parser.decompileFormula(formula, model)`. Renaming is a pure label change
+  (`app.renameTerm`), so no formula rewriting happens at all.
+  (`CG.parser.renameIdentifiers` still exists for name-based text; it is quote-aware.)
+- **`term.formula` is the id-based compiled form.** Never assume it contains readable names;
+  use `CG.parser.decompileFormula` (display) and `CG.parser.refIds` (dependency analysis).
+- **Name rules are now `CG.util.validName`** (spaces allowed; double-quote, backtick and
+  control chars banned). The old `IDENT` regex is gone — don’t reintroduce an
+  identifier check in validation or the new-term/constant editors.
 
 ## 9. Built & verified (status)
 
@@ -236,7 +251,12 @@ No `npm install` needed for anything.
 - [x] Libraries (project + global CRUD, slider/snapshot editor)
 - [x] Storage (localStorage autosave, model list, JSON export, unit library)
 - [x] Import modal (paste AI JSON / file) + validation errors
-- [x] Demos injected at build (expenses → 160,056/yr; beam design → SAFE)
+- [x] Demos injected at build (expenses → 160,056/yr; beam design → SAFE; spaced-names demo)
+- [x] **Names with spaces end-to-end** — terms, constants, groups and model names accept spaces;
+      formulas reference spaced names in double quotes (`"Office Rent" + 1`); formulas are stored
+      internally by stable id (\`t-rent\` refs) so renaming is a pure label change;
+      exports decompile back to readable names; uploading `My Budget.model.json` without a
+      `name` names the model `My Budget`; new demo file `examples/spaces-demo.model.json`
 - [x] Build pipeline (3 outputs), preview server, engine/UI/bundle/audit checks
 - [ ] Deferred / next: undo-redo, printable/interactive report export, in-app AI chat,
       charts for time buckets, drag-rearrange of graph, numeric unit conversion, statistics fns,
@@ -293,12 +313,31 @@ No `npm install` needed for anything.
   showed "?" (layout got the evaluator wrapper instead of the results map). Checks: smoke 26/26, ui-smoke 31/31,
   bundle + audit clean; verified boot in real headless Chrome with zero console errors. Commit pushed to main.
 
+- **Session 6 (names with spaces + id-based backend):** the user asked for the tool to work with
+  "formula names and file names that includes spaces". Q&A locked in: (a) terms **and** constants allow
+  spaces, (b) files with spaces accepted everywhere **and** an uploaded file's name becomes the model name
+  when the JSON has none, (c) the user chose a custom design — *backend references by stable ids,
+  UI shows the spaced names*. Implemented: parser gained quoted-name tokens (`"Office Rent"`) and
+  backtick id tokens and AST `ref` nodes, `compileFormula`/`decompileFormula`,
+  `refIds`, `needsQuotes`/`quoteName`; model validation now compiles name-based formulas to id-based
+  form (idempotent) and uses `CG.util.validName` (spaces OK; quotes/backticks/control chars banned);
+  `Model.toJSON` decompiles back to readable names; evaluator, equation renderer, units deriveUnit and
+  graph all resolve ids → names; inspector/builder/constant editor display decompiled names and
+  quote spaced names on chip insert; `renameTerm` is now a pure label change (no formula rewriting);
+  import passes the file name as a model-name fallback; new demo `examples/spaces-demo.model.json`
+  (“Demo: spaced names”). Checks: smoke 39/39, ui-smoke 40/40, bundle + audit clean (root 160,056;
+  new spaces demo evaluates 99,792). Docs updated (README, MODEL_FORMAT, AI_PROMPT); journey + decisions
+  logged. Commit pushed to main.
+
 ## 11. Suggested actions for the NEXT session
 
 1. If the user opened with a short instruction like "read the agent file and go from
    there", follow **§0 standing session protocol** end to end: orient → plan the to-do
    list → ask questions → execute → detailed commit + push → close the loop. For any
    other request, still start by reading this file + `inputs/` first.
+2. **Names may contain spaces** since session 6 — when a user reports a name problem, check
+   for quoting in formula text (`"Office Rent"`) and for id-based compiled formulas
+   (`CG.parser.decompileFormula`), never for the old identifier regex.
 2. **Before any new work, ask the user as many clarifying questions as needed** until the
    request is unambiguous (working rule 8) — never build on assumptions. Record the Q&A
    verbatim in `inputs/` when it changes the project.
@@ -323,8 +362,4 @@ No `npm install` needed for anything.
    (Never read the built HTML files.)
 
 ---
-*Last updated: session 5 — button-layout audit + CSS fixes, "+ New term" bug fix + regression
-checks, README operation guide, working rule 7 (keep the session to-do list updated after every
-task), working rule 8 (always ask the user as many clarifying questions as needed), working
-rule 9 (always finish with a detailed multi-paragraph commit message + push), and §0 STANDING
-SESSION PROTOCOL (so the user can just say "read the agent file and go from there").*
+*Last updated: session 6 — names with spaces + id-based internal references (see the session log).*

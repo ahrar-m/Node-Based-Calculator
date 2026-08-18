@@ -22,6 +22,27 @@
         }
         throw new Error("Bad number at position " + start);
       }
+      if (ch === '"') {
+        let j = i + 1, closed = false, q = "";
+        while (j < src.length) {
+          const c = src[j];
+          if (c === '"') { closed = true; break; }
+          if (c === "\n" || c === "\r") break;
+          q += c; j++;
+        }
+        if (!closed) throw new Error("Unterminated quoted name at position " + start);
+        toks.push({ t: "ident", v: q, quoted: true, p: start }); i = j + 1; continue;
+      }
+      if (ch === "\u0060") {
+        let j = i + 1, closed = false, q = "";
+        while (j < src.length) {
+          const c = src[j];
+          if (c === "\u0060") { closed = true; break; }
+          q += c; j++;
+        }
+        if (!closed) throw new Error("Unterminated id reference at position " + start);
+        toks.push({ t: "idref", id: q, p: start }); i = j + 1; continue;
+      }
       if (/[A-Za-z_]/.test(ch)) {
         let j = i;
         while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++;
@@ -72,9 +93,10 @@
     parsePrimary() {
       const t = this.next();
       if (t.t === "num") return { t: "num", v: t.v, p: t.p };
+      if (t.t === "idref") return { t: "ref", id: t.id, p: t.p };
       if (t.t === "ident") {
         const nxt = this.peek();
-        if (nxt.t === "op" && nxt.v === "(") {
+        if (!t.quoted && nxt.t === "op" && nxt.v === "(") {
           this.next();
           const args = [];
           if (!(this.peek().t === "op" && this.peek().v === ")")) {
@@ -120,6 +142,11 @@
       case "name": {
         const v = env[ast.n];
         if (typeof v !== "number" || !Number.isFinite(v)) return { ok: false, error: "no value for '" + ast.n + "'" };
+        return { ok: true, value: v };
+      }
+      case "ref": {
+        const v = env[ast.id];
+        if (typeof v !== "number" || !Number.isFinite(v)) return { ok: false, error: "no value for \u0060" + ast.id + "\u0060" };
         return { ok: true, value: v };
       }
       case "un": {
@@ -182,7 +209,7 @@
   }
 
   function simplify(ast) {
-    if (ast.t === "num" || ast.t === "name") return ast;
+    if (ast.t === "num" || ast.t === "name" || ast.t === "ref") return ast;
     if (ast.t === "un") {
       const e = simplify(ast.e);
       if (e.t === "num") return { t: "num", v: ast.op === "-" ? -e.v : e.v };
@@ -221,20 +248,84 @@
     return ast;
   }
 
-  function toSource(ast, parentPrec) {
+  function toSource(ast, parentPrec, ctx) {
     parentPrec = parentPrec || 0;
     switch (ast.t) {
       case "num": return fmtNum(ast.v);
-      case "name": return ast.n;
-      case "un": return (ast.op === "-" ? "-" : "+") + toSource(ast.e, 3);
+      case "name": return quoteName(ast.n);
+      case "ref": {
+        const nm = ctx && ctx.byId ? ctx.byId(ast.id) : null;
+        if (nm != null) return quoteName(nm);
+        return "\u0060" + ast.id + "\u0060";
+      }
+      case "un": return (ast.op === "-" ? "-" : "+") + toSource(ast.e, 3, ctx);
       case "bin": {
         const prec = PREC[ast.op];
-        const s = toSource(ast.l, prec) + " " + ast.op + " " + toSource(ast.r, CMP.has(ast.op) ? prec : prec + (ast.op === "^" ? 0 : 1));
+        const s = toSource(ast.l, prec, ctx) + " " + ast.op + " " + toSource(ast.r, CMP.has(ast.op) ? prec : prec + (ast.op === "^" ? 0 : 1), ctx);
         return prec < parentPrec ? "(" + s + ")" : s;
       }
-      case "call": return ast.fn + "(" + ast.args.map(a => toSource(a, 0)).join(", ") + ")";
+      case "call": return ast.fn + "(" + ast.args.map(a => toSource(a, 0, ctx)).join(", ") + ")";
     }
     return "?";
+  }
+
+  function needsQuotes(n) { return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(n || ""); }
+  function quoteName(n) {
+    const s = String(n == null ? "" : n);
+    return needsQuotes(s) ? '"' + s + '"' : s;
+  }
+
+  // Collect the ids referenced by an id-based (compiled) formula.
+  function refIds(src) {
+    const ast = parse(src);
+    const found = [];
+    const seen = new Set();
+    const walk = (n) => {
+      if (!n) return;
+      if (n.t === "ref") { if (!seen.has(n.id)) { seen.add(n.id); found.push(n.id); } }
+      else if (n.t === "bin") { walk(n.l); walk(n.r); }
+      else if (n.t === "un") walk(n.e);
+      else if (n.t === "call") n.args.forEach(walk);
+    };
+    walk(ast);
+    return found;
+  }
+
+  // Compile a name-based formula (typed or imported JSON) into the internal
+  // id-based form: every term/constant reference becomes a backtick id token
+  // (e.g. \u0060id-xyz\u0060). Idempotent on already-compiled formulas.
+  // Throws on unknown names and on syntax errors.
+  function compileFormula(src, model) {
+    const ast = parse(src);
+    const walk = (n) => {
+      if (!n) return;
+      if (n.t === "name") {
+        const t = model.termByName(n.n);
+        if (t && t.id) { n.t = "ref"; n.id = t.id; return; }
+        const c = model.constantByName(n.n);
+        if (c && c.id) { n.t = "ref"; n.id = c.id; return; }
+        throw new Error("unknown name '" + n.n + "'");
+      } else if (n.t === "bin") { walk(n.l); walk(n.r); }
+      else if (n.t === "un") walk(n.e);
+      else if (n.t === "call") n.args.forEach(walk);
+    };
+    walk(ast);
+    return toSource(ast, 0);
+  }
+
+  // Decompile an id-based formula back into display (name) form, quoting
+  // names that need it (spaces, digits, etc.).
+  function decompileFormula(src, model) {
+    const ast = parse(src);
+    const ctx = {
+      byId: (id) => {
+        const t = model.termById(id);
+        if (t) return t.name;
+        const c = model.constantById(id);
+        return c ? c.name : null;
+      }
+    };
+    return toSource(ast, 0, ctx);
   }
 
   // Token-aware rename: renames every occurrence of the given identifiers
@@ -249,7 +340,10 @@
       const toks = tokenize(src);
       const edits = [];
       for (const t of toks) {
-        if (t.t === "ident" && renameMap.hasOwnProperty(t.v)) edits.push([t.p, t.v.length, renameMap[t.v]]);
+        if (t.t === "ident" && renameMap.hasOwnProperty(t.v)) {
+          const spanLen = t.quoted ? t.v.length + 2 : t.v.length;
+          edits.push([t.p, spanLen, quoteName(renameMap[t.v])]);
+        }
       }
       out = src;
       for (let i = edits.length - 1; i >= 0; i--) {
@@ -258,13 +352,16 @@
       }
       return out;
     } catch {
+      // Rare fallback: tokenize failed (unusual characters). Match whole
+      // words with an escaped regex and replace via a function.
       out = src;
       for (const k of keys) {
-        out = out.replace(new RegExp("\\b" + k + "\\b", "g"), renameMap[k]);
+        const esc = k.replace(/([^\w])/g, (m) => "\\" + m);
+        out = out.replace(new RegExp("(^|[^A-Za-z0-9_])" + esc + "($|[^A-Za-z0-9_])", "g"), (all, a, b) => a + quoteName(renameMap[k]) + b);
       }
       return out;
     }
   }
 
-  CG.parser = { parse, evaluate, simplify, toSource, identifiers, tokenize, renameIdentifiers, FUNCS, CMP };
+  CG.parser = { parse, evaluate, simplify, toSource, identifiers, refIds, tokenize, renameIdentifiers, FUNCS, CMP, needsQuotes, quoteName, compileFormula, decompileFormula };
 })();

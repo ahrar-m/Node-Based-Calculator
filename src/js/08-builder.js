@@ -33,7 +33,8 @@
     taLab.appendChild(el("span", "", "Formula"));
     const ta = el("textarea", "");
     ta.rows = 3;
-    ta.value = term.formula || "";
+    try { ta.value = CG.parser.decompileFormula(term.formula || "", model); }
+    catch { ta.value = term.formula || ""; }
     ta.style.width = "100%"; ta.style.fontFamily = "var(--mono)";
     taLab.appendChild(ta);
     body.appendChild(taLab);
@@ -72,7 +73,7 @@
       const c = el("span", "chip term", t.name);
       const meta = el("span", "meta", " " + (t.period || "") + " " + val);
       c.appendChild(meta);
-      c.addEventListener("click", () => insert(ta, t.name));
+      c.addEventListener("click", () => insert(ta, CG.parser.quoteName(t.name)));
       tRow.appendChild(c);
     }
     body.appendChild(tRow);
@@ -83,7 +84,7 @@
       const chip = el("span", "chip constant", c.name);
       const meta = el("span", "meta", " " + U.fmt(Number(c.value)));
       chip.appendChild(meta);
-      chip.addEventListener("click", () => insert(ta, c.name));
+      chip.addEventListener("click", () => insert(ta, CG.parser.quoteName(c.name)));
       cRow.appendChild(chip);
     }
     body.appendChild(cRow);
@@ -193,9 +194,9 @@
     modal.appendChild(body);
 
     const fName = el("div", "field");
-    fName.appendChild(el("label", "", "Name (letters, digits, underscore — no spaces)"));
+    fName.appendChild(el("label", "", "Name (spaces allowed — reference spaced names in formulas as \"Office Rent\")"));
     const nameInput = el("input", "");
-    nameInput.placeholder = "e.g. total_expenses";
+    nameInput.placeholder = "e.g. total_expenses or Total Expenses";
     fName.appendChild(nameInput);
     body.appendChild(fName);
 
@@ -215,7 +216,7 @@
     const fFormula = el("div", "field");
     fFormula.appendChild(el("label", "", "Formula"));
     const formulaInput = el("textarea", ""); formulaInput.rows = 2;
-    formulaInput.placeholder = "e.g. salaries + rent + utilities";
+    formulaInput.placeholder = "e.g. salaries + \"Office Rent\" + \"Internet\"";
     fFormula.appendChild(formulaInput);
     body.appendChild(fFormula);
 
@@ -263,7 +264,7 @@
     const ok = el("button", "btn primary", "Create");
     ok.addEventListener("click", () => {
       const name = nameInput.value.trim();
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { app.toast("Name must be letters/digits/underscore, no spaces.", "err"); return; }
+      if (!U.validName(name)) { app.toast("Name can include spaces — just no quotes, backticks or control characters.", "err"); return; }
       if (app.state().model.termByName(name)) { app.toast("A term named '" + name + "' already exists.", "err"); return; }
       const kind = kindSel.value;
       const term = { id: U.uid(), kind, name, description: "", period: pickedPeriod.v || "", unit: pickedUnit.v };

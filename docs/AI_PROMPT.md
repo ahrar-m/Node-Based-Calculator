@@ -16,10 +16,10 @@ Term kinds:
 - "value": a plain number. Optional "period": "once" | "week" | "month" | "year". May have slider/snapshots.
 - "formula": computed. Requires "formula" using other term/constant names and + - * / ^, sum(..), min(..), max(..), avg(..), round(x,d), if(cond,a,b), comparisons.
 - "group": a container. "children": [names]. Value = sum of children unless it has its own "formula". Groups give the user drill-down — use them generously.
-Every term: { "id": "…", "kind": "…", "name": "<unique identifier, letters/digits/underscore>", "description": "one plain sentence a non-technical person understands", "formula"?, "period"?, "unit"? , "children"? }
+Every term: { "id": "…", "kind": "…", "name": "<unique name; spaces allowed, e.g. Office Rent>", "description": "one plain sentence a non-technical person understands", "formula"?, "period"?, "unit"? , "children"? }
 
 # Rules
-1. "name" must be unique and a valid identifier.
+1. "name" must be unique. **Spaces are allowed** ("Office Rent", "Total Expenses"). Inside a formula, wrap any name that contains a space in double quotes: "Office Rent" + "Internet". Plain identifier names (tax_rate) need no quotes.
 2. No undefined references and no circular references.
 3. The "root" term is the single final answer of the whole model — make it the most important output.
 4. Put every number the user will tune into "libraries" with a "slider" (sensible min/max/step) and 1–3 "snapshots" (typical values with labels).

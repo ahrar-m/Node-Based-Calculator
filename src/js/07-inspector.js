@@ -227,7 +227,10 @@
   function renderFormulaEditor(ed, term, r, app) {
     ed.appendChild(el("h3", "side-section-title", "Formula"));
     const f = el("div", "notice dim formula-view");
-    f.textContent = term.formula || "";
+    // Formulas are stored internally by id; display the human-readable,
+    // name-based form (spaced names appear quoted).
+    try { f.textContent = CG.parser.decompileFormula(term.formula || "", app.state().model); }
+    catch { f.textContent = term.formula || ""; }
     ed.appendChild(f);
     const actions = el("div", "flex-row");
     const edit = el("button", "btn primary", "\u270e Edit formula");

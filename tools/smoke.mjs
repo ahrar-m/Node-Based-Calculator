@@ -62,5 +62,39 @@ check("all-terms view renders with root badge", all.includes("root") && all.incl
 const rt = new Model(m.toJSON(), []);
 check("round-trip revalidates", rt.errors, []);
 
+// ---- names with spaces + id-based internal references ----
+const sp = JSON.parse(readFileSync("examples/spaces-demo.model.json", "utf8"));
+const ms = new Model(sp, []);
+check("spaces model valid", ms.errors, []);
+const evs = CG.evaluate.evaluateModel(ms);
+check("spaces root (99,792/yr incl. 8% tax)", Math.round(evs.root.value), 99792);
+check("spaces gross total (92,400)", Math.round(evs.results["Gross Total"].value), 92400);
+check("spaces rent converted into gross (x12)", Math.round(evs.contrib.find(c => c.child === "Office Rent" && c.parent === "Gross Total").value), 24000);
+check("internal formula stored by id", ms.termByName("Total Expenses").formula.includes("\u0060"), true);
+check("decompile shows quoted spaced names", CG.parser.decompileFormula(ms.termByName("Total Expenses").formula, ms).includes('"Gross Total"'), true);
+check("quoted names parse to names", CG.parser.identifiers('"Office Rent" + "Internet"'), ["Office Rent", "Internet"]);
+check("toSource keeps quotes for spaced names", CG.parser.toSource(CG.parser.parse('"Office Rent" + 1')), '"Office Rent" + 1');
+check("compileFormula idempotent", CG.parser.compileFormula(ms.termByName("Total Expenses").formula, ms) === ms.termByName("Total Expenses").formula, true);
+check("rename is a label-only change", (() => {
+  const t = ms.termByName("Office Rent");
+  t.name = "Office Space";
+  ms._index();
+  return CG.evaluate.evaluateModel(ms).results["Office Space"].value === 2000 &&
+         CG.evaluate.evaluateModel(ms).results["Total Expenses"].value === 99792;
+})(), true);
+check("spaces unknown name rejected", (() => {
+  try {
+    CG.model.Model.fromJSON(JSON.stringify({ root: "x", terms: [{ kind: "formula", name: "x", formula: '"Nope Not There"' }] }), []);
+    return false;
+  } catch (e) { return /unknown name/i.test(e.message || ""); }
+})(), true);
+const spRt = new Model(ms.toJSON(), []);
+check("spaces round-trip revalidates", spRt.errors, []);
+check("export decompiles to names", (() => {
+  const j = ms.toJSON();
+  const f = j.terms.find(t => t.name === "Total Expenses").formula;
+  return f.includes('"Gross Total"') && !f.includes("\u0060");
+})(), true);
+
 console.log(failures === 0 ? "\nALL SMOKE TESTS PASSED" : "\n" + failures + " FAILURES");
 process.exit(failures === 0 ? 0 : 1);

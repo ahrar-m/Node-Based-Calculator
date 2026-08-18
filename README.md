@@ -13,7 +13,7 @@
 | **Graph view** (centre) | Your model drawn as connected blocks with wires — click any block to inspect it, double-click a group to dive in (breadcrumbs at the top take you back), right-drag to **pan**, wheel to **zoom**, buttons at the bottom-right to zoom in / out / **fit** (centre). |
 | **Equation view** (centre) | The *complete combined equation* of the whole model, auto-derived. Click a name to select it, double-click to expand/collapse that part. Toggle **Numbers** for real values, **All terms** for every term listed, **Expand all / Collapse all**. |
 | **Outline tree** (left sidebar) | Hierarchical list of every term with its live value; click to select, click the ▸/▾ caret to collapse groups. Below it: **+ New term**, demo buttons, and the project/global constant libraries with a global unit library. |
-| **Inspector** (right sidebar) | Click any term → edit its **name** (every reference updates automatically), value/formula, description, **unit**, **period**, **slider**, and **snapshots**. |
+| **Inspector** (right sidebar) | Click any term → edit its **name** (formulas reference terms by id, so renaming is always safe — no formula rewriting), value/formula, description, **unit**, **period**, **slider**, and **snapshots**. |
 | **Formula builder** | In the Inspector, **✎ Edit formula** opens a builder: click operator/function/name/constant chips (they insert at your cursor), live parse status + preview value, and a "how this attaches into the main formula" chain. |
 | **Constant libraries** | **Project constants** (per model) and a **global library** (shared by all models). Each constant can have a slider (min/max/step) and saved snapshot values. |
 | **Units** | Pick a quantity (Time, Length, Force, Pressure, Currency…) then a symbol for any term or constant. Custom units are saved to a global library. For formulas, a hint shows the *derived* unit (e.g. `N·mm / mm³`) so you can check the formula matches the unit. |
@@ -32,7 +32,7 @@
    - *value* → a number
    - *formula* → type it directly (or create it later with the formula builder)
    - *group* → click child chips to choose which terms this bucket sums
-   Unit and period are optional — leave them empty unless you need them.
+   Names may contain spaces (e.g. `Office Rent`) — reference them in formulas as `"Office Rent"`. Unit and period are optional — leave them empty unless you need them.
 5. **Build formulas visually** — click the term in the outline or graph → right inspector → **✎ Edit formula** → click **OPERATORS / FUNCTIONS / YOUR TERMS / CONSTANTS** chips to insert tokens at the cursor; the preview updates as you type; **Save formula** when it parses.
 6. **Wire it together** — a formula referencing `rent` automatically draws a wire from the `rent` block to its parent. Groups sum their children (add/remove children in the inspector, or via **+ Add child**).
 7. **Reusable numbers** — constants sections in the sidebar: **+ Add project constant** (this model only) or **+ Add global constant** (every model). Give them a name, value, optional unit, slider, and snapshots; use the constant's name inside any formula.
@@ -52,13 +52,15 @@
 ## What to look out for
 
 - **Autosave is local to the browser.** Models live in `localStorage` of *this* browser only. Clearing site data or using another browser loses them — **export JSON** for anything important.
-- **Names are identifiers.** Use `letters, digits, underscore` — no spaces, no dashes. Formula references must match exactly (`rent` ≠ `Rent`).
-- **Renaming is global.** Editing a term's name renames it everywhere (formulas, groups, root) — there is **no undo**. If a rename would break the model it is rejected with a toast.
+- **Names may contain spaces.** Terms, constants, groups, and model names can all have spaces (`Office Rent`, `Total Expenses`). Inside a formula, reference a spaced name in double quotes: `"Office Rent" + "Internet"`. Names without spaces can be used unquoted, exactly as before (`rent + utilities`).
+- **Internally, formulas reference terms by stable id.** The display always shows the human names; renaming a term is a pure label change and can never break a formula. Exported JSON is written back in readable, name-based form so any AI can still read it.
 - **No undo/redo yet** for edits. Delete is destructive (confirmed with a prompt).
 - **Periods multiply.** A weekly value in a yearly total counts `× 52`, monthly `× 12`. Nothing is auto-assigned — unset periods count as "once".
 - **Groups have no formulas** — they are always the sum of their children.
 - **Cycle guard.** Formulas/groups that reference each other in a loop are rejected with a clear error.
 - **AI imports must follow the schema** in [docs/MODEL_FORMAT.md](docs/MODEL_FORMAT.md). Use the exact prompt in [docs/AI_PROMPT.md](docs/AI_PROMPT.md) to get valid JSON; bad imports are refused with the reason listed.
+- **Import file names become the model name.** Uploading `My Business Expenses.model.json` whose JSON has no `name` names the model `My Business Expenses` — spaces included. Exported files keep clean, sanitised filenames.
+- **Spaced names demo.** The sidebar's **Demo: spaced names** button loads an expenses model where every name contains spaces (`Office Rent`, `Total Expenses`, `Tax Rate`) to show the whole names-with-spaces pipeline.
 - **The built HTML files are generated.** `docs/index.html`, `index.html`, `calcgraph.html` are outputs of `node build.mjs` — hand-editing them is overwritten on the next build. To change behavior, edit `src/` and rebuild.
 - **Slider limits** are what you set them to — the inspector slider only spans its saved min/max/step.
 - **Unsupported math** for now: no trig/log/statistics functions (v1 scope is arithmetic + sum/min/max/avg/round/if/abs + comparisons).
