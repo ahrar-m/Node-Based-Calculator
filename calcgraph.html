@@ -2448,6 +2448,8 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
     addConstant, updateConstant, deleteConstant,
     importModel, loadModel, loadDemo, newModel,
     openBuilder: (name) => CG.builder.openBuilder(app(), name),
+    setView: (v) => { state.view = v; render(); },
+    setEqTab: (v) => { state.eqTab = v; render(); },
     commit, toast, setSavedFlag
   };
 
@@ -2461,6 +2463,7 @@ aside { background: var(--panel); border-right: 1px solid var(--border); min-hei
   }
 
   CG.app = api;
+  api.init();
 })();
 </script>
 </body>

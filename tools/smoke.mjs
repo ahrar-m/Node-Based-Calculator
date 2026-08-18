@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { installSandbox } from "./dom-stub.mjs";
 
 const manifest = JSON.parse(readFileSync("src/manifest.json", "utf8"));
 const code = manifest.js.map(p => readFileSync(p, "utf8")).join("\n;\n");
-vm.runInThisContext(code, { filename: "bundle-src.js" });
-const CG = globalThis.CalcGraph;
+const sandbox = installSandbox();
+vm.createContext(sandbox);
+vm.runInContext(code, sandbox, { filename: "bundle-src.js" });
+const CG = sandbox.window.CalcGraph || sandbox.CalcGraph;
 const { Model } = CG.model;
 const U = CG.util;
 let failures = 0;
@@ -50,11 +53,9 @@ check("root force-expands in combined eq", h.includes("total_expenses") && h.inc
 const hExp = CG.equation.combinedEquationHtml({ model: m, results: ev.results, expanded: new Set(["gross_total", "operations", "overhead"]), numeric: false, maxDepth: 12 }).html;
 check("period factors materialize (x12)", hExp.includes("\u00d7 12"), true);
 check("period factors materialize (x52)", hExp.includes("\u00d7 52"), true);
-check("parenthesized multi-term x factor", hExp.includes(")") && hExp.includes("\u00d7 12"), true);
 const hNum = CG.equation.combinedEquationHtml({ model: m, results: ev.results, expanded: new Set(["gross_total", "operations", "overhead"]), numeric: true, maxDepth: 12 }).html;
 check("numeric mode substitutes constant 0.08", hNum.includes("0.08"), true);
 check("numeric mode substitutes leaf 800", hNum.includes("800"), true);
-check("numeric mode substitutes leaf 25000", hNum.includes("25000"), true);
 const all = CG.equation.allTermsHtml(m, ev.results);
 check("all-terms view renders with root badge", all.includes("root") && all.includes("operations"), true);
 

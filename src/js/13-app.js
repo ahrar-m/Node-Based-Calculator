@@ -478,6 +478,8 @@
     addConstant, updateConstant, deleteConstant,
     importModel, loadModel, loadDemo, newModel,
     openBuilder: (name) => CG.builder.openBuilder(app(), name),
+    setView: (v) => { state.view = v; render(); },
+    setEqTab: (v) => { state.eqTab = v; render(); },
     commit, toast, setSavedFlag
   };
 
@@ -491,4 +493,5 @@
   }
 
   CG.app = api;
+  api.init();
 })();

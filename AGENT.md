@@ -88,6 +88,7 @@ node build.mjs              # join src/ -> docs/index.html, index.html, calcgrap
 node tools/serve.mjs        # preview at http://localhost:8080
 node tools/smoke.mjs        # 28 engine tests (parse, eval, periods, equations, validation)
 node tools/bundle-check.mjs # execute the BUILT bundle in a Node VM; confirm demos + API
+node tools/ui-smoke.mjs       # boot the BUILT docs/index.html with a DOM stub; 12 UI checks (see Gotchas)
 ```
 No `npm install` needed for anything.
 
@@ -112,6 +113,9 @@ No `npm install` needed for anything.
 - **UI updates:** structural changes call `app.commit()` (full re-render); typing-in-
   inspector changes call `app.updateTerm(name, patch, quiet=true)` to avoid stealing
   focus from inputs.
+- **Boot gotcha (was a shipped bug):** the bundle boots itself via `api.init()` at the end
+  of `src/js/13-app.js`. Any future loader must call `CG.app.init()` or the page stays blank.
+  Blank page === boot never ran; debug with `tools/ui-smoke.mjs` (DOM stubs) or DevTools.
 
 ## 7. Built & verified (status)
 
@@ -141,5 +145,5 @@ No `npm install` needed for anything.
 7. Then `src/js/*.js` in manifest order; `src/styles/*.css`; `build.mjs`.
 
 ---
-*Last updated: session 1 (discovery + full P1 build + verification). Append here whenever a
+*Last updated: session 2 (blank-page boot bug fixed + ui-smoke added; see inputs/agent-journey.md Phase 10). Append here whenever a
 new session changes behavior, decisions, or adds features — future agents rely on this file.*

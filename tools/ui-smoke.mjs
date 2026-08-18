@@ -1,0 +1,155 @@
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+
+class ElStub {
+  constructor(tag) {
+    this.tagName = String(tag).toUpperCase();
+    this.children = [];
+    this.parentNode = null;
+    this.attributes = {};
+    this.dataset = {};
+    this.style = {};
+    this.classList = {
+      _s: new Set(),
+      add: (...c) => c.forEach(x => this.classList._s.add(x)),
+      remove: (...c) => c.forEach(x => this.classList._s.delete(x)),
+      toggle: (c, f) => { if (f === undefined) { this.classList._s.has(c) ? this.classList._s.delete(c) : this.classList._s.add(c); } else if (f) this.classList._s.add(c); else this.classList._s.delete(c); },
+      contains: (c) => this.classList._s.has(c)
+    };
+    this._listeners = {};
+    this.value = "";
+    this._text = "";
+    this.innerHTML = "";
+    this.id = "";
+    this.className = "";
+    this.checked = false;
+    this.disabled = false;
+    this.selected = false;
+    this.type = "";
+    this.selectionStart = 0; this.selectionEnd = 0;
+    this.viewBox = { baseVal: { x: 0, y: 0, width: 1200, height: 700 } };
+    this.clientWidth = 800; this.clientHeight = 600;
+  }
+  get textContent() { return this._text; }
+  set textContent(v) { this._text = String(v == null ? "" : v); }
+  setAttribute(k, v) { this.attributes[k] = String(v); if (k === "id") this.id = String(v); if (k === "viewBox") { const m = String(v).split(/\s+/).map(Number); this.viewBox.baseVal = { x: m[0], y: m[1], width: m[2], height: m[3] }; } }
+  getAttribute(k) { return this.attributes[k] == null ? null : this.attributes[k]; }
+  appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+  removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); c.parentNode = null; return c; }
+  replaceChildren(...cs) { this.children = []; cs.forEach(c => this.appendChild(c)); }
+  addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
+  removeEventListener() {}
+  dispatchEvent(ev) {
+    ev = ev || {}; ev.target = ev.target || this;
+    ev.preventDefault = ev.preventDefault || (() => {});
+    ev.stopPropagation = ev.stopPropagation || (() => {});
+    (this._listeners[ev.type] || []).forEach(fn => fn(ev));
+    return true;
+  }
+  focus() {} click() {}
+  querySelectorAll() { return []; }
+  querySelector() { return null; }
+}
+
+// real-document behavior: getElementById searches the whole tree
+const docRoots = { roots: [] };
+const doc = {
+  createElement: (tag) => new ElStub(tag),
+  createElementNS: (ns, tag) => new ElStub(tag),
+  querySelector: () => null,
+  addEventListener() {},
+  body: new ElStub("body"),
+  hidden: false,
+  getElementById(id) {
+    const walk = (n) => {
+      if (n.id === id) return n;
+      for (const c of n.children || []) { const r = walk(c); if (r) return r; }
+      return null;
+    };
+    for (const r of docRoots.roots) { const f = walk(r); if (f) return f; }
+    return null;
+  }
+};
+const appEl = new ElStub("div"); appEl.id = "app";
+docRoots.roots.push(appEl, doc.body);
+
+const storage = {
+  _m: {},
+  getItem(k) { return this._m[k] == null ? null : this._m[k]; },
+  setItem(k, v) { this._m[k] = String(v); },
+  removeItem(k) { delete this._m[k]; },
+  clear() { this._m = {}; }
+};
+
+const win = { addEventListener() {}, document: doc };
+const urlStub = { createObjectURL: () => "blob:stub", revokeObjectURL: () => {} };
+class BlobStub { constructor(parts) { this.size = parts.join("").length; } }
+
+const html = readFileSync("docs/index.html", "utf8");
+const m = html.match(/<script>([\s\S]*?)<\/script>/);
+if (!m) { console.log("FAIL: no script block in docs/index.html"); process.exit(1); }
+
+const sandbox = {
+  console,
+  document: doc,
+  window: win,
+  localStorage: storage,
+  URL: urlStub,
+  Blob: BlobStub,
+  confirm: () => true,
+  prompt: () => "stubbed",
+  setTimeout, clearTimeout,
+  Event: globalThis.Event || class Event { constructor(type) { this.type = type; } },
+  FileReader: class FileReader { readAsText() {} }
+};
+vm.createContext(sandbox);
+vm.runInContext(m[1], sandbox, { filename: "docs-bundle.js" });
+
+const CG = sandbox.window.CalcGraph || sandbox.CalcGraph;
+let failures = 0;
+const check = (label, cond, extra) => {
+  if (!cond) failures++;
+  console.log((cond ? "PASS" : "FAIL") + "  " + label + (cond ? "" : "   " + (extra || "")));
+};
+
+try {
+  await new Promise(res => setTimeout(res, 50));
+  check("boot: app skeleton built", appEl.children.length >= 3, "children=" + appEl.children.length);
+  const st = CG.app.state();
+  check("boot: model loaded from demo", !!st.model && st.model.terms.length > 0);
+  check("boot: root is total_expenses", !!st.model && st.model.root === "total_expenses");
+  check("boot: evaluation 160056", st.results && Math.round(st.results.root.value) === 160056, "got=" + JSON.stringify(st.results && st.results.root));
+  const fv = doc.getElementById("footer-value");
+  check("boot: footer shows root value", !!fv && fv.textContent.includes("total_expenses"), "footer=" + (fv ? fv.textContent : "null"));
+  check("boot: demos injected", !!(CG.demos && CG.demos.businessExpenses && CG.demos.beamDesign));
+
+  CG.app.select("operations");
+  check("select: selection set", CG.app.state().selected === "operations");
+  CG.app.toggleExpand("operations");
+  CG.app.expandAll();
+  CG.app.collapseAll();
+  CG.app.enterGroup("operations");
+  check("enter group: scopePath", CG.app.state().scopePath.length === 1 && CG.app.state().scopePath[0] === "operations");
+  CG.app.leaveGroup();
+  check("leave group: scope cleared", CG.app.state().scopePath.length === 0);
+  CG.app.updateTerm("rent", { value: 1500 }, true);
+  check("quiet update re-evaluates rent", CG.app.state().results.results.rent.value === 1500);
+  CG.app.updateTerm("rent", { value: 2000 }, true);
+
+  CG.app.setView("equation");
+  CG.app.setEqTab("all");
+  CG.app.setView("graph");
+
+  CG.app.openBuilder("total_expenses");
+  check("builder modal opened", doc.body.children.some(c => (c.className || "").includes("modal-backdrop")));
+
+  try { CG.app.addConstant({ id: "c-x", name: "test_const", value: 5, unit: "", description: "", slider: undefined, snapshots: undefined }, "project"); check("add project constant ok", true); }
+  catch (e) { check("add project constant ok", false, e.message); }
+
+  console.log(failures === 0 ? "\nALL UI SMOKE TESTS PASSED" : "\n" + failures + " UI FAILURES");
+} catch (e) {
+  failures++;
+  console.log("CRASH DURING UI SMOKE:", e && e.stack ? e.stack : e);
+  console.log("\nUI SMOKE FAILED");
+}
+process.exit(failures === 0 ? 0 : 1);

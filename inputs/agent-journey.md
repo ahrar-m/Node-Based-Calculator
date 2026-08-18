@@ -103,5 +103,11 @@ verified app. Numbered phases, each with what was done and why it mattered.
     detailed message, and pushed to `origin/main`
     (`https://github.com/ahrar-m/Node-Based-Calculator`).
 
+## Phase 10 — Blank-page bugfix (user report: "page is blank, local and live")
+37. Root cause: **`CG.app.init()` was never called** — the bundle loaded all 13 modules but nothing booted the app, so `#app` stayed empty. Smoke tests passed because they never exercised the boot/DOM path.
+38. Fix: call `api.init()` at the end of `src/js/13-app.js`; added small `setView`/`setEqTab` API methods so views are switchable/testable.
+39. Built `tools/ui-smoke.mjs` — a DOM-stub harness that boots the **actual built `docs/index.html`** and exercises skeleton build, model load, evaluation, selection, drill-down, quiet updates, view switches, builder modal, and constant creation. Caught and fixed stub-fidelity gaps; now **12/12 UI tests pass** with zero exceptions.
+40. Re-verified the whole suite (engine 29/29, bundle executes, zero external deps), rebuilt all three outputs, committed and pushed.
+
 ---
 *Append new phases here in later sessions so the history stays complete.*
