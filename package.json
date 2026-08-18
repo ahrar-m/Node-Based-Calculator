@@ -1,0 +1,11 @@
+{
+  "name": "calcgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node-Based Calculator (CalcGraph): equation-first formula modeler. Builds one standalone HTML file from separate src modules.",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node tools/serve.mjs",
+    "verify": "node tools/smoke.mjs"
+  }
+}

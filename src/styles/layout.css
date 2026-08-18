@@ -1,0 +1,35 @@
+/* 02-layout.css — app shell grid, header, sidebars, footer */
+#app { display: grid; grid-template-rows: 48px 1fr 34px; height: 100vh; }
+
+/* Header */
+.hdr { display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.hdr .logo { font-weight: 700; letter-spacing: .3px; white-space: nowrap; }
+.hdr .logo small { color: var(--text-dim); font-weight: 400; margin-left: 6px; }
+.hdr .spacer { flex: 1; }
+.hdr select { max-width: 260px; }
+
+/* Workspace: left sidebar | main | right inspector */
+.workspace { display: grid; grid-template-columns: 260px 1fr 320px; min-height: 0; }
+.workspace.cols-none { grid-template-columns: 1fr; }
+aside { background: var(--panel); border-right: 1px solid var(--border); min-height: 0; display: flex; flex-direction: column; }
+#inspector { border-right: none; border-left: 1px solid var(--border); }
+
+/* Left sidebar sections */
+.side-section { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.side-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); margin-bottom: 6px; }
+.side-section .flex-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Main area */
+#main { min-width: 0; min-height: 0; position: relative; background: var(--bg); display: flex; flex-direction: column; }
+#main .view-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+#main .view-breadcrumbs { display: flex; align-items: center; gap: 4px; font-size: 13px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+.crumb { color: var(--accent-2); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.crumb:hover { background: var(--bg-3); }
+.crumb.current { color: var(--text); cursor: default; }
+.crumb-sep { color: var(--text-dim); }
+#view-root { flex: 1; min-height: 0; position: relative; }
+
+/* Footer */
+.ftr { display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--bg-2); border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim); }
+.ftr .root-value { color: var(--ok); font-weight: 700; font-family: var(--mono); font-size: 13px; }
+.ftr .spacer { flex: 1; }

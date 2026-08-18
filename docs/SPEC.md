@@ -1,0 +1,84 @@
+# Node-Based Calculator — Product & Architecture Spec
+
+**Status:** v0.1 draft · working title: **CalcGraph** (rename anytime) · companion files: [MODEL_FORMAT.md](MODEL_FORMAT.md), [AI_PROMPT.md](AI_PROMPT.md), examples in `../examples/`
+
+## 1. Vision (one paragraph)
+
+A browser-based **equation modeler** where you describe the math the way you already think — named formulas and constants — and the tool renders it as a living picture: a graph of connected blocks (your "departments" / "fields"), an **expandable combined equation** for the whole structure, click-to-dive into any part, live sliders for constants, and reusable libraries. You can build a model by typing it, or let **any AI generate it** from a plain-language description using the included prompt template, then import the result.
+
+## 2. The core design decision — *is a node graph the right approach?*
+
+**Honest answer: your instinct for *blocks connected to each other* is the right visualization, but hand-built node graphs are the wrong input method for you — so we flip it: equations first, the graph is a generated view.**
+
+Why: node-first tools (Grasshopper, Blender nodes, Node-RED) make you physically wire ports together. That's a real learning curve, and you told me you have zero node experience. Meanwhile, everything you asked for — *combined equation at the end, dive deep into any part, update the constants* — is natively how **equations** work. So:
+
+- **Equation view (source of truth):** you (or the AI) write named formulas: `operations = salaries + rent + utilities`. Plain, spreadsheet-like syntax, nothing to wire.
+- **Graph view (generated):** the app parses the equations, detects dependencies, and **auto-draws the blocks and wires** — departments as blocks, arrows showing who feeds whom. No manual wiring, ever.
+- Edit either side; both stay in sync. Click any block to dive in (groups), inspect its formula, or read what it does.
+
+This gives you the visual you imagined **plus** a near-zero learning curve, **plus** the combined equation for free (it is literally the model).
+
+## 3. Concepts & vocabulary
+
+| Concept | Meaning |
+|---|---|
+| **Model** | One project (e.g. "My Business Finances"). A single JSON file. |
+| **Term (block)** | A named piece of math: `name`, `description` (what it is / what it does), an optional `formula`, optional `period` (once/week/month/year). |
+| **Group** | A term that contains child terms. **Unlimited nesting.** A group's value defaults to the sum of its children unless it has its own formula. Drilling = clicking the group. |
+| **Constant library** | Named reusable values (tax rate, steel yield). **Project library** per model + **global library** shared across all your models in this browser. Any constant can carry a **slider** (min/max/step) and **snapshots** (saved values you click to apply). |
+| **Combined equation** | The whole model as one symbolic expression. Children are substituted into parents; shown **collapsed by default, every term expandable in place**. |
+| **Inspector** | Panel for the clicked term: what it does, inputs, live value, formula, and where it is used. |
+
+## 4. Feature map (locked in from the discovery Q&A)
+
+| You asked for | Design decision |
+|---|---|
+| Web app, personal use | Single-user web app; data saved in the browser (IndexedDB) |
+| Numbers AND expandable equation, both central | Every term always shows its live value; combined equation panel with collapsible terms |
+| Unlimited nesting / drill-down | Groups inside groups; breadcrumbs (Total → Operations → Salaries) |
+| Project + global libraries, browser storage, export | Two library scopes in local storage; libraries travel with the exported model JSON |
+| AI generates editable models + the prompt to use | `AI_PROMPT.md` template + strict JSON format; Import button validates and ingests |
+| Sliders with limits + saved single-click values | Any input/constant can be slider-bound; snapshots saved per value |
+| JSON export / import | Full-fidelity round-trip, browser storage autosave |
+| Click any node to see what it's capable of | Inspector panel: human-written description + formula + inputs + usage |
+| Dynamic layouts (no fixed positions) | Auto-layout + pan/zoom; nothing is hand-positioned |
+| Basic math for v1 | + − × ÷, `sum`, `min`, `max`, `avg`, `round`, `if`, comparisons, and built-in period helpers (×52, ×12) |
+
+## 5. The three artifacts you always have
+
+1. **The Model (JSON)** — your source of truth (hand-written, AI-generated, or exported).
+2. **The Graph view** — visual understanding (auto-generated).
+3. **The Combined Equation** — symbolic truth with drill-down.
+
+## 6. Evaluation engine (MVP scope)
+
+- Tiny recursive-descent **parser** (our own, ~300 lines) so symbolics stay exact and dependency-free.
+- **Topological evaluation** with memoization and **cycle detection**; live recompute the instant a constant changes (sliders).
+- **Symbolic layer:** every term carries a `value` and an `expression`. A parent's expression = substituting its children's expressions; simplification folds constants and cancels trivial terms. **Expansion is on-demand** (never fully expanded by default — that would be unreadable; this is the trick that makes drill-down work).
+
+## 7. Suggested UX layout
+
+```
+┌────────────┬─────────────────────────┬──────────────┐
+│ Outline    │  GRAPH VIEW (auto,      │  Inspector   │
+│ (model     │  pan/zoom) or           │  (clicked    │
+│  tree)     │  EQUATION VIEW with     │   term)      │
+│ Libraries  │  collapsible terms +    │  sliders     │
+│ Toolbar    │  breadcrumbs            │  snapshots   │
+└────────────┴─────────────────────────┴──────────────┘
+              bottom bar: live value of the root term
+```
+
+## 8. Roadmap
+
+- **P0 (this session):** spec + JSON format + AI prompt template + example models. ✅
+- **P1 (MVP):** web app — import/validate JSON → evaluate → equation view + auto-layout graph → drill into groups → inspector → sliders + snapshots → project/global libraries → autosave to browser → JSON export/import.
+- **P2:** integrated AI assistant (chat inside the app), interactive single-file HTML report for sharing, charts for time-bucketed sums, undo/redo, more math functions.
+- **P3 (optional):** multi-user sync / accounts.
+
+## 9. Tech stack (recommended)
+
+- TypeScript + Vite + React (no router needed for v1).
+- Custom expression parser/evaluator (keeps substitution exact).
+- Auto-layout: dagre or a simple tree/DAG layout; rendering in SVG/Canvas via React (React Flow only if manual graph editing is ever wanted).
+- IndexedDB (or localStorage — models are small) for autosave.

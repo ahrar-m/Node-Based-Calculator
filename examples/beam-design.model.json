@@ -1,0 +1,41 @@
+{
+  "formatVersion": "0.1",
+  "id": "demo-beam-design",
+  "name": "Simply-Supported Beam Check",
+  "description": "A design chain: load -> bending moment -> stress -> utilization -> pass/fail. All units consistent: N, mm, N/mm2 (MPa). Tune any constant.",
+  "root": "status",
+  "libraries": [
+    {
+      "id": "lib-materials",
+      "name": "Materials",
+      "constants": [
+        {
+          "id": "c-fy",
+          "name": "steel_yield",
+          "value": 355,
+          "unit": "MPa",
+          "description": "Yield strength of the chosen steel grade.",
+          "slider": { "min": 235, "max": 460, "step": 5 },
+          "snapshots": [
+            { "label": "S235", "value": 235 },
+            { "label": "S355", "value": 355 },
+            { "label": "S460", "value": 460 }
+          ]
+        }
+      ]
+    }
+  ],
+  "terms": [
+    { "id": "t-F", "kind": "value", "name": "point_load", "period": "once", "value": 10000, "unit": "N", "description": "Concentrated load applied at mid-span.", "slider": { "min": 1000, "max": 50000, "step": 500 } },
+    { "id": "t-L", "kind": "value", "name": "span", "period": "once", "value": 3000, "unit": "mm", "description": "Distance between the two supports.", "slider": { "min": 1000, "max": 12000, "step": 100 } },
+    { "id": "t-S", "kind": "value", "name": "section_modulus", "period": "once", "value": 200000, "unit": "mm3", "description": "Bending section modulus of the chosen steel profile.", "slider": { "min": 50000, "max": 1000000, "step": 10000 }, "snapshots": [
+      { "label": "HEA 100", "value": 183000 },
+      { "label": "W200x46", "value": 889000 },
+      { "label": "Custom", "value": 200000 }
+    ] },
+    { "id": "t-moment", "kind": "formula", "name": "bending_moment", "period": "once", "formula": "point_load * span / 4", "unit": "N.mm", "description": "Maximum bending moment for a central point load: F x L / 4." },
+    { "id": "t-stress", "kind": "formula", "name": "bending_stress", "period": "once", "formula": "bending_moment / section_modulus", "unit": "MPa", "description": "Stress at the extreme fibre of the section: M / S." },
+    { "id": "t-util", "kind": "formula", "name": "utilization", "period": "once", "formula": "bending_stress / steel_yield", "unit": "ratio", "description": "How loaded the beam is. Less than 1 means it passes." },
+    { "id": "t-status", "kind": "formula", "name": "status", "period": "once", "formula": "if(utilization <= 1, 1, 0)", "unit": "flag", "description": "1 = SAFE, 0 = OVERLOADED. The single answer." }
+  ]
+}

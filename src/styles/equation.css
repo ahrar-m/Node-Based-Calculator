@@ -1,0 +1,20 @@
+/* 05-equation.css — expandable combined equation view */
+.eq-scroll { padding: 18px; overflow: auto; height: 100%; }
+.eq-root { font-family: var(--mono); font-size: 15px; line-height: 1.9; }
+.eq-line { padding: 3px 0; }
+.eq-line .eq-def { color: var(--accent-2); }
+.eq-line .eq-name { cursor: pointer; padding: 0 3px; border-radius: 4px; font-weight: 700; }
+.eq-line .eq-name:hover { background: var(--bg-3); }
+.eq-line .eq-name.sel { background: rgba(79,156,249,.25); outline: 1px solid var(--accent); }
+.eq-line .eq-name.group { color: #fbbf24; }
+.eq-line .eq-name.value { color: #34d399; }
+.eq-line .eq-name.formula { color: #7cc0ff; }
+.eq-val { color: var(--ok); font-size: 0.85em; margin-left: 8px; }
+.eq-op { color: var(--accent-2); }
+.eq-num { color: #fcd34d; }
+.eq-fn { color: #fbbf24; }
+.eq-factor { color: #8b5cf6; }
+.eq-toggle { cursor: pointer; color: var(--text-dim); user-select: none; padding: 0 4px; }
+.eq-toggle:hover { color: var(--text); }
+.eq-children { margin-left: 26px; border-left: 1px dashed var(--border-2); padding-left: 14px; }
+.eq-badge { font-size: 10px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; margin-left: 8px; vertical-align: 2px; }

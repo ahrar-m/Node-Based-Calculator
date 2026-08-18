@@ -1,0 +1,42 @@
+{
+  "formatVersion": "0.1",
+  "id": "demo-business-expenses",
+  "name": "My Business Finances",
+  "description": "Annual expense rollup: departments grouped, tax applied, every number tunable.",
+  "root": "total_expenses",
+  "libraries": [
+    {
+      "id": "lib-finance",
+      "name": "Finance constants",
+      "constants": [
+        {
+          "id": "c-tax-rate",
+          "name": "tax_rate",
+          "value": 0.08,
+          "unit": "fraction",
+          "description": "Effective tax rate on the gross total.",
+          "slider": { "min": 0, "max": 0.25, "step": 0.01 },
+          "snapshots": [
+            { "label": "Low (5%)", "value": 0.05 },
+            { "label": "Current (8%)", "value": 0.08 },
+            { "label": "High (12%)", "value": 0.12 }
+          ]
+        }
+      ]
+    }
+  ],
+  "terms": [
+    { "id": "t-rent", "kind": "value", "name": "rent", "period": "month", "value": 2000, "unit": "USD", "description": "Monthly office rent." },
+    { "id": "t-util", "kind": "value", "name": "utilities", "period": "month", "value": 300, "unit": "USD", "description": "Electricity, water and internet." },
+    { "id": "t-s1", "kind": "value", "name": "salary_alice", "period": "month", "value": 1500, "unit": "USD", "description": "Monthly salary — Alice." },
+    { "id": "t-s2", "kind": "value", "name": "salary_bob", "period": "month", "value": 1500, "unit": "USD", "description": "Monthly salary — Bob." },
+    { "id": "t-s3", "kind": "value", "name": "salary_carol", "period": "month", "value": 1500, "unit": "USD", "description": "Monthly salary — Carol." },
+    { "id": "t-salaries", "kind": "formula", "name": "salaries", "period": "month", "formula": "salary_alice + salary_bob + salary_carol", "unit": "USD", "description": "Total monthly payroll. Drill in to see each person." },
+    { "id": "t-marketing", "kind": "value", "name": "marketing", "period": "week", "value": 800, "unit": "USD", "description": "Weekly ads and promotions spend." },
+    { "id": "t-equipment", "kind": "value", "name": "equipment", "period": "once", "value": 25000, "unit": "USD", "description": "One-time purchase of machines." },
+    { "id": "g-operations", "kind": "group", "name": "operations", "period": "year", "unit": "USD", "description": "Everything needed to run the core work. Click to see each cost.", "children": ["salaries", "rent", "utilities"] },
+    { "id": "g-overhead", "kind": "group", "name": "overhead", "period": "year", "unit": "USD", "description": "Support costs that keep the business visible.", "children": ["marketing"] },
+    { "id": "t-gross", "kind": "formula", "name": "gross_total", "period": "year", "formula": "operations + overhead + equipment", "unit": "USD", "description": "All costs before tax." },
+    { "id": "t-total", "kind": "formula", "name": "total_expenses", "period": "year", "formula": "gross_total * (1 + tax_rate)", "unit": "USD", "description": "Final annual total including tax. This is the answer." }
+  ]
+}
