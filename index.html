@@ -714,7 +714,20 @@ input[type=range]::-moz-range-thumb {
   const PERIODS = { once: 1, week: 52, month: 12, year: 1 };
   const PERIOD_ORDER = ["once", "week", "month", "year"];
   const KINDS = ["value", "formula", "group"];
-  const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+  // Names may contain spaces (and most printable characters). Only the two
+  // characters reserved by the formula grammar are banned: double quotes
+  // (used to quote spaced names in formulas) and backticks (used for internal
+  // id references).
+  function validName(n) {
+    if (typeof n !== "string") return false;
+    const s = n.trim();
+    if (!s || s !== n) return false;                 // non-empty, no leading/trailing whitespace
+    if (s.length > 120) return false;
+    if (/["\u0060]/.test(s)) return false;          // reserved by the formula grammar
+    if (/[\u0000-\u001f\u007f]/.test(s)) return false; // no control characters
+    return true;
+  }
 
   function yearlyFactor(p) { return PERIODS[p] !== undefined ? PERIODS[p] : 1; }
   function periodFactor(child, parent) { return yearlyFactor(child) / yearlyFactor(parent); }
@@ -729,19 +742,19 @@ input[type=range]::-moz-range-thumb {
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function uid() { return "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-  CG.util = { PERIODS, PERIOD_ORDER, yearlyFactor, periodFactor, fmt, esc, uid, IDENT };
+  CG.util = { PERIODS, PERIOD_ORDER, yearlyFactor, periodFactor, fmt, esc, uid, validName };
 
   class Model {
-    constructor(data, globalConstants) {
+    constructor(data, globalConstants, opts) {
       this.orig = data;
       this.formatVersion = data.formatVersion || "0.1";
       this.id = data.id || uid();
-      this.name = data.name || "Untitled model";
+      this.name = data.name || (opts && opts.nameFallback) || "Untitled model";
       this.description = data.description || "";
       this.root = data.root || "";
       this.libraries = Array.isArray(data.libraries) ? data.libraries : [];
       this.globalLibraries = Array.isArray(data.globalLibraries) ? data.globalLibraries : [];
-      this.terms = Array.isArray(data.terms) ? data.terms.map(t => ({ ...t, children: t.children ? [...t.children] : [] })) : [];
+      this.terms = Array.isArray(data.terms) ? data.terms.map(t => ({ ...t, id: t.id || uid(), children: t.children ? [...t.children] : [] })) : [];
       this.projectConstants = this.libraries.flatMap(l => (Array.isArray(l.constants) ? l.constants : []));
       this.globalConstants = Array.isArray(globalConstants) ? globalConstants : [];
       this._index();
@@ -752,21 +765,36 @@ input[type=range]::-moz-range-thumb {
       this.byId = new Map();
       this.byName = new Map();
       for (const t of this.terms) {
-        if (t.id) this.byId.set(t.id, t);
+        if (!t.id) t.id = uid();
+        this.byId.set(t.id, t);
         this.byName.set(t.name, t);
       }
       this.constantsByName = new Map();
-      for (const c of this.projectConstants) if (!this.constantsByName.has(c.name)) this.constantsByName.set(c.name, c);
-      for (const c of this.globalConstants) if (!this.constantsByName.has(c.name)) this.constantsByName.set(c.name, c);
+      this.constantsById = new Map();
+      const addConst = (c) => {
+        if (!c || !c.name) return;
+        if (!c.id) c.id = uid();
+        if (!this.constantsByName.has(c.name)) this.constantsByName.set(c.name, c);
+        if (!this.constantsById.has(c.id)) this.constantsById.set(c.id, c);
+      };
+      for (const c of this.projectConstants) addConst(c);
+      for (const c of this.globalConstants) addConst(c);
     }
 
     termByName(n) { return this.byName.get(n); }
     constantByName(n) { return this.constantsByName.get(n); }
+    termById(id) { return this.byId.get(id); }
+    constantById(id) { return this.constantsById.get(id); }
 
     depsOf(term) {
       if (term.kind === "group") return [...(term.children || [])];
       if (term.kind === "formula") {
-        try { return CG.parser.identifiers(term.formula); } catch { return []; }
+        try {
+          return CG.parser.refIds(term.formula)
+            .map(id => this.termById(id))
+            .filter(Boolean)
+            .map(t => t.name);
+        } catch { return []; }
       }
       return [];
     }
@@ -777,7 +805,10 @@ input[type=range]::-moz-range-thumb {
         if (t.name === name) continue;
         if (t.kind === "group" && (t.children || []).includes(name)) out.push(t.name);
         else if (t.kind === "formula") {
-          try { if (CG.parser.identifiers(t.formula).includes(name)) out.push(t.name); } catch {}
+          try {
+            const refs = CG.parser.refIds(t.formula).map(id => this.termById(id)).filter(Boolean).map(t => t.name);
+            if (refs.includes(name)) out.push(t.name);
+          } catch {}
         }
       }
       return out;
@@ -792,6 +823,14 @@ input[type=range]::-moz-range-thumb {
     validate() {
       const errs = [];
       if (!this.terms.length) errs.push("Model has no terms.");
+      // Compile name-based formulas to stable id-based form FIRST so every
+      // later check (references, deps, cycles, evaluation) sees the same
+      // canonical form. Compiling is idempotent on already-compiled formulas.
+      for (const t of this.terms) {
+        if (t.kind !== "formula") continue;
+        try { t.formula = CG.parser.compileFormula(t.formula, this); }
+        catch (e) { errs.push("Term '" + t.name + "': formula " + e.message); }
+      }
       const seenNames = new Set(), seenIds = new Set();
       const deps = new Map();
       for (const t of this.terms) {
@@ -800,7 +839,7 @@ input[type=range]::-moz-range-thumb {
         seenNames.add(t.name);
         if (t.id && seenIds.has(t.id)) errs.push("Term id '" + t.id + "' is used more than once.");
         if (t.id) seenIds.add(t.id);
-        if (!IDENT.test(t.name)) errs.push("Term name '" + t.name + "' is not a valid identifier (letters, digits, underscore).");
+        if (!validName(t.name)) errs.push("Term name '" + t.name + "' is not valid (spaces are fine \u2014 avoid quotes, backticks and control characters).");
         if (!KINDS.includes(t.kind)) errs.push("Term '" + t.name + "': unknown kind '" + t.kind + "'.");
         if (t.period && !PERIODS.hasOwnProperty(t.period)) errs.push("Term '" + t.name + "': invalid period '" + t.period + "'.");
         if (t.kind === "formula" && !t.formula) errs.push("Term '" + t.name + "': kind formula needs a formula.");
@@ -822,12 +861,12 @@ input[type=range]::-moz-range-thumb {
 
       for (const t of this.terms) {
         if (t.kind !== "formula") continue;
-        let names = [];
-        try { names = CG.parser.identifiers(t.formula); }
+        let refs = [];
+        try { refs = CG.parser.refIds(t.formula); }
         catch (e) { errs.push("Term '" + t.name + "': formula syntax error — " + e.message); continue; }
-        for (const ref of names) {
-          if (!this.byName.has(ref) && !this.constantsByName.has(ref))
-            errs.push("Term '" + t.name + "': references unknown name '" + ref + "'.");
+        for (const ref of refs) {
+          if (!this.byId.has(ref) && !this.constantsById.has(ref))
+            errs.push("Term '" + t.name + "': references unknown id '" + ref + "'.");
         }
       }
       for (const t of this.terms) {
@@ -868,17 +907,21 @@ input[type=range]::-moz-range-thumb {
         root: this.root,
         globalLibraries: [...this.globalLibraries],
         libraries: this.libraries,
-        terms: this.terms.map(t => JSON.parse(JSON.stringify(t)))
+        terms: this.terms.map(t => {
+          const c = JSON.parse(JSON.stringify(t));
+          if (c.formula) { try { c.formula = CG.parser.decompileFormula(c.formula, this); } catch {} }
+          return c;
+        })
       };
     }
 
-    static fromJSON(text, globalConstants) {
+    static fromJSON(text, globalConstants, opts) {
       let data;
       try { data = typeof text === "string" ? JSON.parse(text) : text; }
       catch (e) { throw new Error("Not valid JSON: " + e.message); }
       if (!data || typeof data !== "object" || !Array.isArray(data.terms))
         throw new Error("Model JSON must be an object with a 'terms' array.");
-      const m = new Model(data, globalConstants);
+      const m = new Model(data, globalConstants, opts || {});
       if (m.errors.length) throw new Error("Model has " + m.errors.length + " problem(s):\n- " + m.errors.join("\n- "));
       return m;
     }
@@ -910,6 +953,27 @@ input[type=range]::-moz-range-thumb {
           if (Number.isFinite(n)) { toks.push({ t: "num", v: n, p: start }); i = j; continue; }
         }
         throw new Error("Bad number at position " + start);
+      }
+      if (ch === '"') {
+        let j = i + 1, closed = false, q = "";
+        while (j < src.length) {
+          const c = src[j];
+          if (c === '"') { closed = true; break; }
+          if (c === "\n" || c === "\r") break;
+          q += c; j++;
+        }
+        if (!closed) throw new Error("Unterminated quoted name at position " + start);
+        toks.push({ t: "ident", v: q, quoted: true, p: start }); i = j + 1; continue;
+      }
+      if (ch === "\u0060") {
+        let j = i + 1, closed = false, q = "";
+        while (j < src.length) {
+          const c = src[j];
+          if (c === "\u0060") { closed = true; break; }
+          q += c; j++;
+        }
+        if (!closed) throw new Error("Unterminated id reference at position " + start);
+        toks.push({ t: "idref", id: q, p: start }); i = j + 1; continue;
       }
       if (/[A-Za-z_]/.test(ch)) {
         let j = i;
@@ -961,9 +1025,10 @@ input[type=range]::-moz-range-thumb {
     parsePrimary() {
       const t = this.next();
       if (t.t === "num") return { t: "num", v: t.v, p: t.p };
+      if (t.t === "idref") return { t: "ref", id: t.id, p: t.p };
       if (t.t === "ident") {
         const nxt = this.peek();
-        if (nxt.t === "op" && nxt.v === "(") {
+        if (!t.quoted && nxt.t === "op" && nxt.v === "(") {
           this.next();
           const args = [];
           if (!(this.peek().t === "op" && this.peek().v === ")")) {
@@ -1009,6 +1074,11 @@ input[type=range]::-moz-range-thumb {
       case "name": {
         const v = env[ast.n];
         if (typeof v !== "number" || !Number.isFinite(v)) return { ok: false, error: "no value for '" + ast.n + "'" };
+        return { ok: true, value: v };
+      }
+      case "ref": {
+        const v = env[ast.id];
+        if (typeof v !== "number" || !Number.isFinite(v)) return { ok: false, error: "no value for \u0060" + ast.id + "\u0060" };
         return { ok: true, value: v };
       }
       case "un": {
@@ -1071,7 +1141,7 @@ input[type=range]::-moz-range-thumb {
   }
 
   function simplify(ast) {
-    if (ast.t === "num" || ast.t === "name") return ast;
+    if (ast.t === "num" || ast.t === "name" || ast.t === "ref") return ast;
     if (ast.t === "un") {
       const e = simplify(ast.e);
       if (e.t === "num") return { t: "num", v: ast.op === "-" ? -e.v : e.v };
@@ -1110,20 +1180,84 @@ input[type=range]::-moz-range-thumb {
     return ast;
   }
 
-  function toSource(ast, parentPrec) {
+  function toSource(ast, parentPrec, ctx) {
     parentPrec = parentPrec || 0;
     switch (ast.t) {
       case "num": return fmtNum(ast.v);
-      case "name": return ast.n;
-      case "un": return (ast.op === "-" ? "-" : "+") + toSource(ast.e, 3);
+      case "name": return quoteName(ast.n);
+      case "ref": {
+        const nm = ctx && ctx.byId ? ctx.byId(ast.id) : null;
+        if (nm != null) return quoteName(nm);
+        return "\u0060" + ast.id + "\u0060";
+      }
+      case "un": return (ast.op === "-" ? "-" : "+") + toSource(ast.e, 3, ctx);
       case "bin": {
         const prec = PREC[ast.op];
-        const s = toSource(ast.l, prec) + " " + ast.op + " " + toSource(ast.r, CMP.has(ast.op) ? prec : prec + (ast.op === "^" ? 0 : 1));
+        const s = toSource(ast.l, prec, ctx) + " " + ast.op + " " + toSource(ast.r, CMP.has(ast.op) ? prec : prec + (ast.op === "^" ? 0 : 1), ctx);
         return prec < parentPrec ? "(" + s + ")" : s;
       }
-      case "call": return ast.fn + "(" + ast.args.map(a => toSource(a, 0)).join(", ") + ")";
+      case "call": return ast.fn + "(" + ast.args.map(a => toSource(a, 0, ctx)).join(", ") + ")";
     }
     return "?";
+  }
+
+  function needsQuotes(n) { return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(n || ""); }
+  function quoteName(n) {
+    const s = String(n == null ? "" : n);
+    return needsQuotes(s) ? '"' + s + '"' : s;
+  }
+
+  // Collect the ids referenced by an id-based (compiled) formula.
+  function refIds(src) {
+    const ast = parse(src);
+    const found = [];
+    const seen = new Set();
+    const walk = (n) => {
+      if (!n) return;
+      if (n.t === "ref") { if (!seen.has(n.id)) { seen.add(n.id); found.push(n.id); } }
+      else if (n.t === "bin") { walk(n.l); walk(n.r); }
+      else if (n.t === "un") walk(n.e);
+      else if (n.t === "call") n.args.forEach(walk);
+    };
+    walk(ast);
+    return found;
+  }
+
+  // Compile a name-based formula (typed or imported JSON) into the internal
+  // id-based form: every term/constant reference becomes a backtick id token
+  // (e.g. \u0060id-xyz\u0060). Idempotent on already-compiled formulas.
+  // Throws on unknown names and on syntax errors.
+  function compileFormula(src, model) {
+    const ast = parse(src);
+    const walk = (n) => {
+      if (!n) return;
+      if (n.t === "name") {
+        const t = model.termByName(n.n);
+        if (t && t.id) { n.t = "ref"; n.id = t.id; return; }
+        const c = model.constantByName(n.n);
+        if (c && c.id) { n.t = "ref"; n.id = c.id; return; }
+        throw new Error("unknown name '" + n.n + "'");
+      } else if (n.t === "bin") { walk(n.l); walk(n.r); }
+      else if (n.t === "un") walk(n.e);
+      else if (n.t === "call") n.args.forEach(walk);
+    };
+    walk(ast);
+    return toSource(ast, 0);
+  }
+
+  // Decompile an id-based formula back into display (name) form, quoting
+  // names that need it (spaces, digits, etc.).
+  function decompileFormula(src, model) {
+    const ast = parse(src);
+    const ctx = {
+      byId: (id) => {
+        const t = model.termById(id);
+        if (t) return t.name;
+        const c = model.constantById(id);
+        return c ? c.name : null;
+      }
+    };
+    return toSource(ast, 0, ctx);
   }
 
   // Token-aware rename: renames every occurrence of the given identifiers
@@ -1138,7 +1272,10 @@ input[type=range]::-moz-range-thumb {
       const toks = tokenize(src);
       const edits = [];
       for (const t of toks) {
-        if (t.t === "ident" && renameMap.hasOwnProperty(t.v)) edits.push([t.p, t.v.length, renameMap[t.v]]);
+        if (t.t === "ident" && renameMap.hasOwnProperty(t.v)) {
+          const spanLen = t.quoted ? t.v.length + 2 : t.v.length;
+          edits.push([t.p, spanLen, quoteName(renameMap[t.v])]);
+        }
       }
       out = src;
       for (let i = edits.length - 1; i >= 0; i--) {
@@ -1147,15 +1284,18 @@ input[type=range]::-moz-range-thumb {
       }
       return out;
     } catch {
+      // Rare fallback: tokenize failed (unusual characters). Match whole
+      // words with an escaped regex and replace via a function.
       out = src;
       for (const k of keys) {
-        out = out.replace(new RegExp("\\b" + k + "\\b", "g"), renameMap[k]);
+        const esc = k.replace(/([^\w])/g, (m) => "\\" + m);
+        out = out.replace(new RegExp("(^|[^A-Za-z0-9_])" + esc + "($|[^A-Za-z0-9_])", "g"), (all, a, b) => a + quoteName(renameMap[k]) + b);
       }
       return out;
     }
   }
 
-  CG.parser = { parse, evaluate, simplify, toSource, identifiers, tokenize, renameIdentifiers, FUNCS, CMP };
+  CG.parser = { parse, evaluate, simplify, toSource, identifiers, refIds, tokenize, renameIdentifiers, FUNCS, CMP, needsQuotes, quoteName, compileFormula, decompileFormula };
 })();
 
 
@@ -1200,17 +1340,18 @@ input[type=range]::-moz-range-thumb {
           const ast = CG.parser.parse(term.formula);
           const env = {};
           let err = null;
-          const refs = CG.parser.identifiers(term.formula);
+          // Formulas are stored internally in id-based form; resolve refs by id.
+          const refs = CG.parser.refIds(term.formula);
           for (const ref of refs) {
-            const t = model.termByName(ref);
+            const t = model.termById(ref);
             if (t) {
               const ev = evalTerm(t);
-              if (ev.error) { err = ref + ": " + ev.error; break; }
+              if (ev.error) { err = t.name + ": " + ev.error; break; }
               const f = U.periodFactor(t.period || "once", term.period || "once");
               env[ref] = ev.value * f;
-              contrib.push({ parent: term.name, child: ref, factor: f, value: env[ref] });
+              contrib.push({ parent: term.name, child: t.name, factor: f, value: env[ref] });
             } else {
-              const c = model.constantByName(ref);
+              const c = model.constantById(ref);
               if (c !== undefined) env[ref] = Number(c.value);
               else { err = "unknown reference '" + ref + "'"; break; }
             }
@@ -1327,7 +1468,8 @@ input[type=range]::-moz-range-thumb {
   function astHtml(ast, parentTerm, ctx, depth) {
     switch (ast.t) {
       case "num": return numSpan(CG.parser.toSource(ast));
-      case "name": return refInAst(ast.n, parentTerm, ctx, depth);
+      case "name": return refByName(ast.n, parentTerm, ctx, depth);
+      case "ref": return refById(ast.id, parentTerm, ctx, depth);
       case "un": return '<span class="eq-op">' + (ast.op === "-" ? "-" : "+") + '</span>' + astHtml(ast.e, parentTerm, ctx, depth);
       case "bin": {
         const op = ast.op === "*" ? X : ast.op === "/" ? D : ast.op;
@@ -1341,22 +1483,33 @@ input[type=range]::-moz-range-thumb {
     return "?";
   }
 
-  function refInAst(name, parentTerm, ctx, depth) {
+  // AST nodes are internal id references (compiled form); constants and
+  // terms are resolved by id, then everything downstream keeps using their
+  // human names (spaces included) for nesting, expansion and display.
+  function refById(id, parentTerm, ctx, depth) {
+    const { model } = ctx;
+    return refCore(id, model.termById(id), model.constantById(id), parentTerm, ctx, depth);
+  }
+  function refByName(name, parentTerm, ctx, depth) {
+    const { model } = ctx;
+    return refCore(name, model.termByName(name), model.constantByName(name), parentTerm, ctx, depth);
+  }
+  function refCore(key, child, cobj, parentTerm, ctx, depth) {
     const { model, expanded, maxDepth, numeric } = ctx;
-    const child = model.termByName(name);
-    const cobj = model.constantByName(name);
+    if (!child && !cobj) return '<span class="eq-name">?' + U.esc(key) + '</span>';
+    const nm = child ? child.name : cobj.name;
     if (cobj && numeric) return numSpan(U.fmt(Number(cobj.value)) + (cobj.unit ? ' ' + U.esc(cobj.unit) : ""));
     const factor = child ? U.periodFactor(child.period || "once", parentTerm.period || "once") : 1;
-    const expandHere = child && expanded.has(name) && depth < maxDepth;
+    const expandHere = child && expanded.has(nm) && depth < maxDepth;
     let core;
     if (expandHere) {
-      const inner = exprHtml(name, ctx, depth);
+      const inner = exprHtml(nm, ctx, depth);
       core = child.kind !== "value" ? paren(inner) : inner;
     } else if (child && numeric && child.kind === "value") {
-      const r = ctx.results && ctx.results[name];
+      const r = ctx.results && ctx.results[nm];
       core = numSpan(r && r.value !== undefined ? U.fmt(r.value) : "?");
     } else {
-      core = nameSpan(name, model);
+      core = nameSpan(nm, model);
     }
     return core + factorSuffix(factor);
   }
@@ -1369,7 +1522,15 @@ input[type=range]::-moz-range-thumb {
       else if (t.kind === "group") {
         def = (t.children || []).map(c => '<span class="eq-name group" data-name="' + U.esc(c) + '">' + U.esc(c) + '</span>').join('<span class="eq-op"> + </span>');
       } else if (t.formula) {
-        try { def = CG.parser.toSource(CG.parser.simplify(CG.parser.parse(t.formula))).replace(/\*/g, X).replace(/\//g, D); }
+        try {
+          const src = CG.parser.toSource(CG.parser.simplify(CG.parser.parse(t.formula)), 0, {
+            byId: (id) => {
+              const tt = model.termById(id); if (tt) return tt.name;
+              const cc = model.constantById(id); return cc ? cc.name : null;
+            }
+          });
+          def = src.replace(/\*/g, X).replace(/\//g, D);
+        }
         catch { def = '<span class="eq-name" style="color:var(--err)">syntax error</span>'; }
       } else def = "";
       const r = results[t.name] || {};
@@ -2134,6 +2295,7 @@ input[type=range]::-moz-range-thumb {
     switch (ast.t) {
       case "num": return "";
       case "name": return getUnit(ast.n) || "";
+      case "ref": return getUnit(ast.id) || "";
       case "un": return unitOfAst(ast.e, getUnit);
       case "bin": {
         const l = unitOfAst(ast.l, getUnit), r = unitOfAst(ast.r, getUnit);
@@ -2167,10 +2329,10 @@ input[type=range]::-moz-range-thumb {
     if (!formulaSrc || !model) return "";
     let ast;
     try { ast = CG.parser.parse(formulaSrc); } catch { return ""; }
-    const getUnit = (n) => {
-      const t = model.termByName(n);
+    const getUnit = (idOrName) => {
+      const t = model.termById(idOrName) || model.termByName(idOrName);
       if (t && t.unit) return t.unit;
-      const c = model.constantByName(n);
+      const c = model.constantById(idOrName) || model.constantByName(idOrName);
       if (c && c.unit) return c.unit;
       return "";
     };
@@ -2413,7 +2575,10 @@ input[type=range]::-moz-range-thumb {
   function renderFormulaEditor(ed, term, r, app) {
     ed.appendChild(el("h3", "side-section-title", "Formula"));
     const f = el("div", "notice dim formula-view");
-    f.textContent = term.formula || "";
+    // Formulas are stored internally by id; display the human-readable,
+    // name-based form (spaced names appear quoted).
+    try { f.textContent = CG.parser.decompileFormula(term.formula || "", app.state().model); }
+    catch { f.textContent = term.formula || ""; }
     ed.appendChild(f);
     const actions = el("div", "flex-row");
     const edit = el("button", "btn primary", "\u270e Edit formula");
@@ -2513,7 +2678,8 @@ input[type=range]::-moz-range-thumb {
     taLab.appendChild(el("span", "", "Formula"));
     const ta = el("textarea", "");
     ta.rows = 3;
-    ta.value = term.formula || "";
+    try { ta.value = CG.parser.decompileFormula(term.formula || "", model); }
+    catch { ta.value = term.formula || ""; }
     ta.style.width = "100%"; ta.style.fontFamily = "var(--mono)";
     taLab.appendChild(ta);
     body.appendChild(taLab);
@@ -2552,7 +2718,7 @@ input[type=range]::-moz-range-thumb {
       const c = el("span", "chip term", t.name);
       const meta = el("span", "meta", " " + (t.period || "") + " " + val);
       c.appendChild(meta);
-      c.addEventListener("click", () => insert(ta, t.name));
+      c.addEventListener("click", () => insert(ta, CG.parser.quoteName(t.name)));
       tRow.appendChild(c);
     }
     body.appendChild(tRow);
@@ -2563,7 +2729,7 @@ input[type=range]::-moz-range-thumb {
       const chip = el("span", "chip constant", c.name);
       const meta = el("span", "meta", " " + U.fmt(Number(c.value)));
       chip.appendChild(meta);
-      chip.addEventListener("click", () => insert(ta, c.name));
+      chip.addEventListener("click", () => insert(ta, CG.parser.quoteName(c.name)));
       cRow.appendChild(chip);
     }
     body.appendChild(cRow);
@@ -2673,9 +2839,9 @@ input[type=range]::-moz-range-thumb {
     modal.appendChild(body);
 
     const fName = el("div", "field");
-    fName.appendChild(el("label", "", "Name (letters, digits, underscore — no spaces)"));
+    fName.appendChild(el("label", "", "Name (spaces allowed — reference spaced names in formulas as \"Office Rent\")"));
     const nameInput = el("input", "");
-    nameInput.placeholder = "e.g. total_expenses";
+    nameInput.placeholder = "e.g. total_expenses or Total Expenses";
     fName.appendChild(nameInput);
     body.appendChild(fName);
 
@@ -2695,7 +2861,7 @@ input[type=range]::-moz-range-thumb {
     const fFormula = el("div", "field");
     fFormula.appendChild(el("label", "", "Formula"));
     const formulaInput = el("textarea", ""); formulaInput.rows = 2;
-    formulaInput.placeholder = "e.g. salaries + rent + utilities";
+    formulaInput.placeholder = "e.g. salaries + \"Office Rent\" + \"Internet\"";
     fFormula.appendChild(formulaInput);
     body.appendChild(fFormula);
 
@@ -2743,7 +2909,7 @@ input[type=range]::-moz-range-thumb {
     const ok = el("button", "btn primary", "Create");
     ok.addEventListener("click", () => {
       const name = nameInput.value.trim();
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { app.toast("Name must be letters/digits/underscore, no spaces.", "err"); return; }
+      if (!U.validName(name)) { app.toast("Name can include spaces — just no quotes, backticks or control characters.", "err"); return; }
       if (app.state().model.termByName(name)) { app.toast("A term named '" + name + "' already exists.", "err"); return; }
       const kind = kindSel.value;
       const term = { id: U.uid(), kind, name, description: "", period: pickedPeriod.v || "", unit: pickedUnit.v };
@@ -2840,8 +3006,8 @@ input[type=range]::-moz-range-thumb {
     modal.appendChild(body);
 
     const fName = el("div", "field");
-    fName.appendChild(el("label", "", "Name (as used in formulas)"));
-    const nameI = el("input", ""); nameI.value = existing ? existing.name : ""; nameI.placeholder = "tax_rate";
+    fName.appendChild(el("label", "", "Name (as used in formulas — spaces allowed, quoted when referenced)"));
+    const nameI = el("input", ""); nameI.value = existing ? existing.name : ""; nameI.placeholder = "tax_rate or Tax Rate";
     fName.appendChild(nameI); body.appendChild(fName);
 
     const fVal = el("div", "field");
@@ -2909,7 +3075,7 @@ input[type=range]::-moz-range-thumb {
     const save = el("button", "btn primary", "Save constant");
     save.addEventListener("click", () => {
       const name = nameI.value.trim();
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { app.toast("Constant name must be letters/digits/underscore.", "err"); return; }
+      if (!U.validName(name)) { app.toast("Constant name can include spaces — just no quotes, backticks or control characters.", "err"); return; }
       const value = Number(valI.value);
       if (!Number.isFinite(value)) { app.toast("Value must be a number.", "err"); return; }
       const obj = {
@@ -3060,10 +3226,14 @@ input[type=range]::-moz-range-thumb {
     tPaste.addEventListener("click", () => { tPaste.classList.add("active"); tFile.classList.remove("active"); pastePane.style.display = ""; filePane.style.display = "none"; });
     tFile.addEventListener("click", () => { tFile.classList.add("active"); tPaste.classList.remove("active"); pastePane.style.display = "none"; filePane.style.display = ""; });
 
+    const fileNameToModelName = (fn) => (fn || "").replace(/\.model\.json$/i, "").replace(/\.json$/i, "").trim();
     const tryImport = (text, sourceName) => {
       clear(errBox);
       try {
-        const model = app.importModel(text);
+        // When a JSON file is uploaded and its content has no "name", the
+        // file's own name (spaces included) becomes the model name.
+        const fallback = sourceName && /\.json$/i.test(sourceName) ? fileNameToModelName(sourceName) : "";
+        const model = app.importModel(text, fallback);
         backdrop.remove();
         app.toast("Imported '" + model.name + "' — " + model.terms.length + " terms.", "ok");
       } catch (e) {
@@ -3092,7 +3262,7 @@ input[type=range]::-moz-range-thumb {
   // build.mjs replaces the token below with demo model JSON assignments
   const CG = (typeof window !== "undefined" ? window : globalThis).CalcGraph =
     (typeof window !== "undefined" ? window : globalThis).CalcGraph || {};
-  (()=>{ const CG=(typeof window!=='undefined'?window:globalThis).CalcGraph=(typeof window!=='undefined'?window:globalThis).CalcGraph||{};CG.demos=CG.demos||{}; CG.demos.businessExpenses={"formatVersion":"0.1","id":"demo-business-expenses","name":"My Business Finances","description":"Annual expense rollup: departments grouped, tax applied, every number tunable.","root":"total_expenses","libraries":[{"id":"lib-finance","name":"Finance constants","constants":[{"id":"c-tax-rate","name":"tax_rate","value":0.08,"unit":"fraction","description":"Effective tax rate on the gross total.","slider":{"min":0,"max":0.25,"step":0.01},"snapshots":[{"label":"Low (5%)","value":0.05},{"label":"Current (8%)","value":0.08},{"label":"High (12%)","value":0.12}]}]}],"terms":[{"id":"t-rent","kind":"value","name":"rent","period":"month","value":2000,"unit":"USD","description":"Monthly office rent."},{"id":"t-util","kind":"value","name":"utilities","period":"month","value":300,"unit":"USD","description":"Electricity, water and internet."},{"id":"t-s1","kind":"value","name":"salary_alice","period":"month","value":1500,"unit":"USD","description":"Monthly salary — Alice."},{"id":"t-s2","kind":"value","name":"salary_bob","period":"month","value":1500,"unit":"USD","description":"Monthly salary — Bob."},{"id":"t-s3","kind":"value","name":"salary_carol","period":"month","value":1500,"unit":"USD","description":"Monthly salary — Carol."},{"id":"t-salaries","kind":"formula","name":"salaries","period":"month","formula":"salary_alice + salary_bob + salary_carol","unit":"USD","description":"Total monthly payroll. Drill in to see each person."},{"id":"t-marketing","kind":"value","name":"marketing","period":"week","value":800,"unit":"USD","description":"Weekly ads and promotions spend."},{"id":"t-equipment","kind":"value","name":"equipment","period":"once","value":25000,"unit":"USD","description":"One-time purchase of machines."},{"id":"g-operations","kind":"group","name":"operations","period":"year","unit":"USD","description":"Everything needed to run the core work. Click to see each cost.","children":["salaries","rent","utilities"]},{"id":"g-overhead","kind":"group","name":"overhead","period":"year","unit":"USD","description":"Support costs that keep the business visible.","children":["marketing"]},{"id":"t-gross","kind":"formula","name":"gross_total","period":"year","formula":"operations + overhead + equipment","unit":"USD","description":"All costs before tax."},{"id":"t-total","kind":"formula","name":"total_expenses","period":"year","formula":"gross_total * (1 + tax_rate)","unit":"USD","description":"Final annual total including tax. This is the answer."}]};CG.demos=CG.demos||{}; CG.demos.beamDesign={"formatVersion":"0.1","id":"demo-beam-design","name":"Simply-Supported Beam Check","description":"A design chain: load -> bending moment -> stress -> utilization -> pass/fail. All units consistent: N, mm, N/mm2 (MPa). Tune any constant.","root":"status","libraries":[{"id":"lib-materials","name":"Materials","constants":[{"id":"c-fy","name":"steel_yield","value":355,"unit":"MPa","description":"Yield strength of the chosen steel grade.","slider":{"min":235,"max":460,"step":5},"snapshots":[{"label":"S235","value":235},{"label":"S355","value":355},{"label":"S460","value":460}]}]}],"terms":[{"id":"t-F","kind":"value","name":"point_load","period":"once","value":10000,"unit":"N","description":"Concentrated load applied at mid-span.","slider":{"min":1000,"max":50000,"step":500}},{"id":"t-L","kind":"value","name":"span","period":"once","value":3000,"unit":"mm","description":"Distance between the two supports.","slider":{"min":1000,"max":12000,"step":100}},{"id":"t-S","kind":"value","name":"section_modulus","period":"once","value":200000,"unit":"mm3","description":"Bending section modulus of the chosen steel profile.","slider":{"min":50000,"max":1000000,"step":10000},"snapshots":[{"label":"HEA 100","value":183000},{"label":"W200x46","value":889000},{"label":"Custom","value":200000}]},{"id":"t-moment","kind":"formula","name":"bending_moment","period":"once","formula":"point_load * span / 4","unit":"N.mm","description":"Maximum bending moment for a central point load: F x L / 4."},{"id":"t-stress","kind":"formula","name":"bending_stress","period":"once","formula":"bending_moment / section_modulus","unit":"MPa","description":"Stress at the extreme fibre of the section: M / S."},{"id":"t-util","kind":"formula","name":"utilization","period":"once","formula":"bending_stress / steel_yield","unit":"ratio","description":"How loaded the beam is. Less than 1 means it passes."},{"id":"t-status","kind":"formula","name":"status","period":"once","formula":"if(utilization <= 1, 1, 0)","unit":"flag","description":"1 = SAFE, 0 = OVERLOADED. The single answer."}]};})();
+  (()=>{ const CG=(typeof window!=='undefined'?window:globalThis).CalcGraph=(typeof window!=='undefined'?window:globalThis).CalcGraph||{};CG.demos=CG.demos||{}; CG.demos.businessExpenses={"formatVersion":"0.1","id":"demo-business-expenses","name":"My Business Finances","description":"Annual expense rollup: departments grouped, tax applied, every number tunable.","root":"total_expenses","libraries":[{"id":"lib-finance","name":"Finance constants","constants":[{"id":"c-tax-rate","name":"tax_rate","value":0.08,"unit":"fraction","description":"Effective tax rate on the gross total.","slider":{"min":0,"max":0.25,"step":0.01},"snapshots":[{"label":"Low (5%)","value":0.05},{"label":"Current (8%)","value":0.08},{"label":"High (12%)","value":0.12}]}]}],"terms":[{"id":"t-rent","kind":"value","name":"rent","period":"month","value":2000,"unit":"USD","description":"Monthly office rent."},{"id":"t-util","kind":"value","name":"utilities","period":"month","value":300,"unit":"USD","description":"Electricity, water and internet."},{"id":"t-s1","kind":"value","name":"salary_alice","period":"month","value":1500,"unit":"USD","description":"Monthly salary — Alice."},{"id":"t-s2","kind":"value","name":"salary_bob","period":"month","value":1500,"unit":"USD","description":"Monthly salary — Bob."},{"id":"t-s3","kind":"value","name":"salary_carol","period":"month","value":1500,"unit":"USD","description":"Monthly salary — Carol."},{"id":"t-salaries","kind":"formula","name":"salaries","period":"month","formula":"salary_alice + salary_bob + salary_carol","unit":"USD","description":"Total monthly payroll. Drill in to see each person."},{"id":"t-marketing","kind":"value","name":"marketing","period":"week","value":800,"unit":"USD","description":"Weekly ads and promotions spend."},{"id":"t-equipment","kind":"value","name":"equipment","period":"once","value":25000,"unit":"USD","description":"One-time purchase of machines."},{"id":"g-operations","kind":"group","name":"operations","period":"year","unit":"USD","description":"Everything needed to run the core work. Click to see each cost.","children":["salaries","rent","utilities"]},{"id":"g-overhead","kind":"group","name":"overhead","period":"year","unit":"USD","description":"Support costs that keep the business visible.","children":["marketing"]},{"id":"t-gross","kind":"formula","name":"gross_total","period":"year","formula":"operations + overhead + equipment","unit":"USD","description":"All costs before tax."},{"id":"t-total","kind":"formula","name":"total_expenses","period":"year","formula":"gross_total * (1 + tax_rate)","unit":"USD","description":"Final annual total including tax. This is the answer."}]};CG.demos=CG.demos||{}; CG.demos.beamDesign={"formatVersion":"0.1","id":"demo-beam-design","name":"Simply-Supported Beam Check","description":"A design chain: load -> bending moment -> stress -> utilization -> pass/fail. All units consistent: N, mm, N/mm2 (MPa). Tune any constant.","root":"status","libraries":[{"id":"lib-materials","name":"Materials","constants":[{"id":"c-fy","name":"steel_yield","value":355,"unit":"MPa","description":"Yield strength of the chosen steel grade.","slider":{"min":235,"max":460,"step":5},"snapshots":[{"label":"S235","value":235},{"label":"S355","value":355},{"label":"S460","value":460}]}]}],"terms":[{"id":"t-F","kind":"value","name":"point_load","period":"once","value":10000,"unit":"N","description":"Concentrated load applied at mid-span.","slider":{"min":1000,"max":50000,"step":500}},{"id":"t-L","kind":"value","name":"span","period":"once","value":3000,"unit":"mm","description":"Distance between the two supports.","slider":{"min":1000,"max":12000,"step":100}},{"id":"t-S","kind":"value","name":"section_modulus","period":"once","value":200000,"unit":"mm3","description":"Bending section modulus of the chosen steel profile.","slider":{"min":50000,"max":1000000,"step":10000},"snapshots":[{"label":"HEA 100","value":183000},{"label":"W200x46","value":889000},{"label":"Custom","value":200000}]},{"id":"t-moment","kind":"formula","name":"bending_moment","period":"once","formula":"point_load * span / 4","unit":"N.mm","description":"Maximum bending moment for a central point load: F x L / 4."},{"id":"t-stress","kind":"formula","name":"bending_stress","period":"once","formula":"bending_moment / section_modulus","unit":"MPa","description":"Stress at the extreme fibre of the section: M / S."},{"id":"t-util","kind":"formula","name":"utilization","period":"once","formula":"bending_stress / steel_yield","unit":"ratio","description":"How loaded the beam is. Less than 1 means it passes."},{"id":"t-status","kind":"formula","name":"status","period":"once","formula":"if(utilization <= 1, 1, 0)","unit":"flag","description":"1 = SAFE, 0 = OVERLOADED. The single answer."}]};CG.demos=CG.demos||{}; CG.demos.spacesDemo={"formatVersion":"0.1","id":"spaces-demo-v1","name":"Business Finances (names with spaces)","description":"The same expense rollup as the expenses demo, but every term and constant name contains spaces — proving names with spaces work end to end: typing, import, graph, equation, renaming and export.","root":"Total Expenses","libraries":[{"id":"lib-spaces","name":"Finance constants","constants":[{"id":"c-tax-rate","name":"Tax Rate","value":0.08,"unit":"ratio","description":"Effective annual tax rate applied to gross expenses.","slider":{"min":0,"max":0.25,"step":0.01},"snapshots":[{"label":"Low (5%)","value":0.05},{"label":"Current (8%)","value":0.08},{"label":"High (12%)","value":0.12}]}]}],"terms":[{"id":"t-rent","kind":"value","name":"Office Rent","value":2000,"period":"month","unit":"USD","description":"Monthly rent for the office."},{"id":"t-net","kind":"value","name":"Internet","value":150,"period":"month","unit":"USD","description":"Monthly internet bill."},{"id":"t-mark","kind":"value","name":"Marketing","value":800,"period":"week","unit":"USD","description":"Weekly marketing spend."},{"id":"t-eq","kind":"value","name":"Equipment","value":25000,"period":"once","unit":"USD","description":"One-time equipment purchase."},{"id":"t-gross","kind":"formula","name":"Gross Total","formula":"sum(\"Office Rent\", \"Internet\", \"Marketing\", \"Equipment\")","period":"year","unit":"USD","description":"All expenses before tax, expressed yearly."},{"id":"t-total","kind":"formula","name":"Total Expenses","formula":"\"Gross Total\" * (1 + \"Tax Rate\")","period":"year","unit":"USD","description":"The single final answer: yearly total including tax."}]};})();
 })();
 
 
@@ -3248,32 +3418,24 @@ input[type=range]::-moz-range-thumb {
     commit();
   }
 
-  // Rename a term AND every reference to it (formulas, group children, root).
-  // A dry-run clone is validated first so a broken rename never mutates the model.
+  // Renaming is a pure label change: formulas reference terms by stable id,
+  // so nothing needs rewriting — only the display name, any group-child
+  // lists (those use names), and the root pointer are updated.
   function renameTerm(oldName, newName) {
     const m = state.model;
     if (!m || !m.termByName(oldName)) return false;
     if (oldName === newName) return true;
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
-      toast("Term names must be letters, digits or underscore — no spaces.", "err"); return false;
+    if (!U.validName(newName)) {
+      toast("Names can include spaces — just no quotes, backticks or control characters.", "err"); return false;
     }
     if (m.termByName(newName)) { toast("A term named '" + newName + "' already exists.", "err"); return false; }
-    const applyRename = (data, o, n) => {
-      const map = { [o]: n };
-      for (const t of data.terms) {
-        if (t.kind === "formula" && t.formula) t.formula = CG.parser.renameIdentifiers(t.formula, map);
-        if (t.kind === "group" && Array.isArray(t.children)) t.children = t.children.map(c => c === o ? n : c);
-        if (t.name === o) t.name = n;
-      }
-      if (data.root === o) data.root = n;
-    };
-    const clone = JSON.parse(JSON.stringify(m.toJSON()));
-    applyRename(clone, oldName, newName);
-    try {
-      const test = new CG.model.Model(clone, state.globalConstants);
-      if (test.errors.length) { toast("Can't rename: " + test.errors[0], "err"); return false; }
-    } catch (e) { toast("Can't rename: " + e.message, "err"); return false; }
-    applyRename(m, oldName, newName);
+    const t = m.termByName(oldName);
+    t.name = newName;
+    for (const tr of m.terms) {
+      if (tr.kind === "group" && Array.isArray(tr.children))
+        tr.children = tr.children.map(c => c === oldName ? newName : c);
+    }
+    if (m.root === oldName) m.root = newName;
     m._index();
     if (state.selected === oldName) state.selected = newName;
     commit();
@@ -3320,8 +3482,8 @@ input[type=range]::-moz-range-thumb {
     } catch (e) { toast(e.message, "err"); }
   }
 
-  function importModel(text) {
-    const m = CG.model.Model.fromJSON(text, state.globalConstants);
+  function importModel(text, nameFallback) {
+    const m = CG.model.Model.fromJSON(text, state.globalConstants, { nameFallback: nameFallback || "" });
     const list = CG.storage.loadModels();
     const entry = { id: m.id, name: m.name, updatedAt: Date.now(), model: m.toJSON() };
     const idx = list.findIndex(x => x.id === m.id);
@@ -3489,7 +3651,9 @@ input[type=range]::-moz-range-thumb {
       bDemo1.addEventListener("click", () => loadDemo("businessExpenses"));
       const bDemo2 = el("button", "btn small", "Demo: beam");
       bDemo2.addEventListener("click", () => loadDemo("beamDesign"));
-      btnRow.appendChild(bDemo1); btnRow.appendChild(bDemo2);
+      const bDemo3 = el("button", "btn small", "Demo: spaced names");
+      bDemo3.addEventListener("click", () => loadDemo("spacesDemo"));
+      btnRow.appendChild(bDemo1); btnRow.appendChild(bDemo2); btnRow.appendChild(bDemo3);
     }
     secTree.appendChild(btnRow);
     sb.appendChild(secTree);
